@@ -3,6 +3,7 @@ module Eval (evalProgram, evalExpression, evalString, displayStack, builtins) wh
 import Types
 import Parser
 
+import Data.Char
 import Data.List
 import qualified Data.Map as M
 
@@ -37,6 +38,10 @@ isAtom (SmChar _)     = True
 isAtom (SmOperator _) = True
 isAtom _              = False
 
+fromBool :: Bool -> SmExpression
+fromBool True  = SmInt 1
+fromBool False = SmInt 0
+
 evalIfList :: SmExpression -> SmFunction
 evalIfList (SmList q)     = evalProgram q
 evalIfList x              = evalExpression x
@@ -47,8 +52,12 @@ evalIfList1 x s = case evalIfList x s of
   []  -> SmInt 0
 
 displayExpression :: SmExpression -> String
-displayExpression (SmInt x)      = show x ++ " "
-displayExpression (SmFloat x)    = show x ++ " "
+displayExpression (SmInt x)
+  | x >= 0                       = show x ++ " "
+  | otherwise                    = "_" ++ show (-x) ++ " "
+displayExpression (SmFloat x)
+  | x >= 0                       = show x ++ " "
+  | otherwise                    = "_" ++ show (-x) ++ " "
 displayExpression (SmChar x)     = '\'':[x]
 displayExpression (SmString xs)  = show xs
 displayExpression (SmList xs)    = "[" ++ (xs >>= displayExpression) ++ "]"
@@ -83,6 +92,8 @@ builtins = M.fromList [('!', smPop),
                        ('=', smSame),
                        ('?', smIf),
                        ('@', smRoll),
+                       ('A', smAnswer),
+                       ('N', smNaturals),
                        ('_', smNegative),
                        ('d', smDip),
                        ('i', smI),
@@ -96,7 +107,10 @@ builtins = M.fromList [('!', smPop),
                        ('░', smToInt),
                        ('▒', smToFloat),
                        ('▓', smToChar),
-                       ('█', smToString)]
+                       ('█', smToString),
+                       ('└', smFloor),
+                       ('┌', smCeiling),
+                       ('÷', smDiv)]
 
 -- Built-in functions, sorted by names
 
@@ -119,6 +133,17 @@ smAdd (x1:SmList x2:s)          = smAdd (SmList x2:x1:s)
 smAdd []                        = [SmInt 0]
 smAdd s                         = s
 
+-- SmOperator 'A'
+smAnswer s = SmInt 42:s
+
+-- SmOperator '┌'
+smCeiling (SmInt x:s)    = SmInt x:s
+smCeiling (SmFloat x:s)  = SmInt (floor x):s
+smCeiling (SmChar x:s)   = SmChar (toLower x):s
+smCeiling (SmList x:s)   = toListFunction (head . smCeiling) (SmList x:s)
+smCeiling (SmString x:s) = smToString $ toListFunction (head . smCeiling) (SmString x:s)
+smCeiling s              = s
+
 -- SmOperator ':'
 smCons (SmList xs:x:s)   = SmList (x:xs):s
 smCons (SmString xs:x:s) = SmString (toString x ++ xs):s
@@ -130,18 +155,29 @@ smCons s                 = [SmList s]
 smDip (q:x:s) = x:evalIfList q s
 smDip s       = s
 
+-- SmOperator '÷'
+smDiv s = smFloor $ smDivide s
+
 -- SmOperator '/'
 smDivide (x1:x2:s)
   | isAtom x1 && isAtom x2 = SmFloat (toFloat x2 / toFloat x1):s
   | isAtom x2              = toListFunction (head . smDivide) (x1:x2:s)
   | isAtom x1              = toListFunction (head . smDivide . (x1:)) (x2:s)
   | otherwise              = toListFunction2 (head . smDivide) (x1:x2:s)
-smDivide []                = [SmInt 1]
-smDivide s                 = s
+smDivide []                = [SmFloat 1]
+smDivide s                 = smToFloat s
 
 -- SmOperator ';'
 smDup (x:s) = x:x:s
 smDup s     = s
+
+-- SmOperator '└'
+smFloor (SmInt x:s)    = SmInt x:s
+smFloor (SmFloat x:s)  = SmInt (floor x):s
+smFloor (SmChar x:s)   = SmChar (toLower x):s
+smFloor (SmList x:s)   = toListFunction (head . smFloor) (SmList x:s)
+smFloor (SmString x:s) = smToString $ toListFunction (head . smFloor) (SmString x:s)
+smFloor s              = s
 
 -- SmOperator 'i'
 smI (q:s) = evalIfList q s
@@ -172,17 +208,20 @@ smMap s       = s
 -- SmOperator '-'
 smMinus s = smAdd $ smNegative s
 
+-- SmOperator 'N'
+smNaturals s = SmList (map SmInt [0..]):s
+
 -- SmOperator '_'
 smNegative (SmInt x:s)   = SmInt (-x):s
 smNegative (SmFloat x:s) = SmFloat (-x):s
 smNegative (SmChar x:s)  = SmInt (- (toInt $ SmChar x)):s
-smNegative (x:s)         = toListFunction (head . smNegative) (x:s)
+smNegative (x:s)
+  | isAtom x             = x:s
+  | otherwise            = toListFunction (head . smNegative) (x:s)
 smNegative s             = s
 
 -- SmOperator '~'
-smNot (x:s)
-  | isFalsy x = SmInt 1:s
-  | otherwise = SmInt 0:s
+smNot (x:s) = fromBool (isFalsy x):s
 smNot s       = [SmInt 0]
 
 -- SmOperator '!'

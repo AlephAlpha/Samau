@@ -1,21 +1,28 @@
 Samau
 =====
-Samau is a stack-based, concatenative, pure functional golfing language inspired by [Burlesque](https://github.com/FMNSSun/Burlesque), [Joy](http://www.latrobe.edu.au/humanities/research/research-projects/past-projects/joy-programming-language), [Mathematica](http://wolfram.com/mathematica/), [Seriously](https://github.com/Mego/Seriously) and other languages.
+Samau is a stack-based, concatenative, pure functional golfing language inspired by [Burlesque](http://mroman.ch/burlesque), [J](http://jsoftware.com/), [Joy](http://www.latrobe.edu.au/humanities/research/research-projects/past-projects/joy-programming-language), [Mathematica](http://wolfram.com/mathematica/), [Seriously](https://github.com/Mego/Seriously) and other languages. It is still under development, and only support a very limited amount of commands.
 
-The default character encoding of Samau is [CP737](https://en.wikipedia.org/wiki/Code_page_737), the DOS code page for Greek language. But that's just for counting bytes. There is also a UTF-8 mode, and the REPL uses UTF-8.
+Some of the code is based on Roman Müntener's [Burlesque](https://github.com/FMNSSun/Burlesque), which is under [BSD license](https://github.com/FMNSSun/Burlesque#license).
 
-Usage
-=====
+The default character encoding of Samau is [CP737](https://en.wikipedia.org/wiki/Code_page_737), the DOS code page for Greek language. But that's just for counting bytes. There is also a UTF-8 mode, and the REPL uses UTF-8. You _don't_ need to set your terminal text encoding to CP737.
+
+## Usage
 
 To compile the Samau interpreter, you need the [Haskell Platform](www.haskell.org/platform/).
 
 First, install the required packages:
 
+    cabal install haskeline parsec
+
+<!--
     cabal install arithmoi haskeline parsec
+
+[See this if you have problem installing `arithmoi`.](https://github.com/cartazio/arithmoi/issues/13)
+-->
 
 Then compile it:
 
-    ghc --make main.hs -o samau
+    ghc --make Main.hs -o samau
 
 And then:
 
@@ -27,7 +34,9 @@ Or you can run it without compiling:
 
     runghc main.hs [args]
 
-Links
-=====
+## Document
+See the [wiki](https://github.com/AlephAlpha/Samau/wiki).
+
+## Links
 * [PPCG.se](http://codegolf.stackexchange.com/)
 * [_The Legend of Samau_](http://www.guokr.com/blog/744130/)
