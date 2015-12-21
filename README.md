@@ -32,7 +32,7 @@ And then:
 
 Or you can run it without compiling:
 
-    runghc main.hs [args]
+    runghc Main.hs [args]
 
 ## Document
 See the [wiki](https://github.com/AlephAlpha/Samau/wiki).

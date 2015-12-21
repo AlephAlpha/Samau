@@ -46,13 +46,17 @@ parseList = do
 parseList' :: Parser SmExpression
 parseList' = char '`' >> parseExpression >>= return . SmList . (:[])
 
+parseEmpty :: Parser SmExpression
+parseEmpty = char '`' >> spaces >> return (SmList [])
+
 parseOperator :: Parser SmExpression
 parseOperator = fmap SmOperator (noneOf " \"'1234567890[]`")
 
 parseExpression :: Parser SmExpression
 parseExpression = (parseString
                <|> parseList
-               <|> parseList'
+               <|> try parseList'
+               <|> parseEmpty
                <|> parseChar
                <|> try parseFloat
                <|> try parseFloat'

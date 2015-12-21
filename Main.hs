@@ -11,11 +11,14 @@ import System.Environment
 runProgram :: String -> String -> String
 runProgram p = displayStack . evalString p . (:[]) . SmString
 
+runProgramNoInput :: String -> String
+runProgramNoInput p = displayStack $ evalString p []
+
 repl = do
  line <- getInputLine ":-) "
  case line of
    Nothing -> return ()
-   Just p  -> outputStrLn (runProgram p []) >> repl
+   Just p  -> outputStrLn (runProgramNoInput p) >> repl
 
 main = do
   args <- getArgs

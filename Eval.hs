@@ -79,6 +79,8 @@ toListFunction2 f (xs1:xs2:s) = SmList (zipWith (\x1 x2 -> f (x1:x2:s)) (toList 
 builtins = M.fromList [('!', smPop),
                        ('#', smSize),
                        ('$', smSwap),
+                       ('%', smMod),
+                       ('&', smAnd),
                        ('(', smPred),
                        (')', smSucc),
                        ('*', smTimes),
@@ -89,19 +91,27 @@ builtins = M.fromList [('!', smPop),
                        ('/', smDivide),
                        (':', smCons),
                        (';', smDup),
+                       ('<', smLess),
                        ('=', smSame),
+                       ('>', smGreater),
                        ('?', smIf),
                        ('@', smRoll),
                        ('A', smAnswer),
                        ('N', smNaturals),
+                       ('\\', smUncons),
+                       ('^', smPower),
                        ('_', smNegative),
                        ('d', smDip),
+                       ('f', smFold),
+                       ('g', smFold1),
                        ('i', smI),
                        ('m', smMap),
                        ('t', smTwice),
                        ('x', smX),
+                       ('w', smWhile),
                        ('z', smZipWith),
                        ('{', smUnstack),
+                       ('|', smOr),
                        ('}', smStack),
                        ('~', smNot),
                        ('░', smToInt),
@@ -109,7 +119,10 @@ builtins = M.fromList [('!', smPop),
                        ('▓', smToChar),
                        ('█', smToString),
                        ('└', smFloor),
+                       ('═', smEq),
                        ('┌', smCeiling),
+                       ('≥', smGreaterEq),
+                       ('≤', smLessEq),
                        ('÷', smDiv)]
 
 -- Built-in functions, sorted by names
@@ -132,6 +145,11 @@ smAdd (SmList x1:x2:s)          = toListFunction (head . smAdd) (SmList x1:x2:s)
 smAdd (x1:SmList x2:s)          = smAdd (SmList x2:x1:s)
 smAdd []                        = [SmInt 0]
 smAdd s                         = s
+
+-- SmOperator '&'
+smAnd (x1:x2:s) = fromBool (isTruthy x1 && isTruthy x2):s
+smAnd []        = [SmInt 1]
+smAnd s         = s
 
 -- SmOperator 'A'
 smAnswer s = SmInt 42:s
@@ -171,6 +189,14 @@ smDivide s                 = smToFloat s
 smDup (x:s) = x:x:s
 smDup s     = s
 
+-- SmOperator '═'
+smEq (x1:x2:s)
+  | isAtom x1 && isAtom x2 = fromBool (toFloat x2 == toFloat x1):s
+  | isAtom x2              = toListFunction (head . smEq) (x1:x2:s)
+  | isAtom x1              = smEq (x2:x1:s)
+  | otherwise              = toListFunction2 (head . smEq) (x1:x2:s)
+smEq s                     = s
+
 -- SmOperator '└'
 smFloor (SmInt x:s)    = SmInt x:s
 smFloor (SmFloat x:s)  = SmInt (floor x):s
@@ -178,6 +204,34 @@ smFloor (SmChar x:s)   = SmChar (toLower x):s
 smFloor (SmList x:s)   = toListFunction (head . smFloor) (SmList x:s)
 smFloor (SmString x:s) = smToString $ toListFunction (head . smFloor) (SmString x:s)
 smFloor s              = s
+
+-- SmOperator 'f'
+smFold (q:SmList []:s)     = s
+smFold (q:SmList (x:xs):s) = smFold (q:SmList xs:evalIfList q (x:s))
+smFold (q:SmString xs:s)   = smFold (q:SmList (toList $ SmString xs):s)
+smFold (q:x:s)             = smFold (q:smRange0 (x:s))
+smFold s                   = s
+
+-- SmOperator 'g'
+smFold1 (q:x:s)
+  | isAtom x  = smFold1 (q:smRange0 (x:s))
+  | otherwise = smFold $ q:smUncons (x:s)
+
+-- SmOperator '>'
+smGreater (x1:x2:s)
+  | isAtom x1 && isAtom x2 = fromBool (toFloat x2 > toFloat x1):s
+  | isAtom x2              = toListFunction (head . smGreater) (x1:x2:s)
+  | isAtom x1              = toListFunction (head . smGreater . (x1:)) (x2:s)
+  | otherwise              = toListFunction2 (head . smGreater) (x1:x2:s)
+smGreater s                = s
+
+-- SmOperator '≥'
+smGreaterEq (x1:x2:s)
+  | isAtom x1 && isAtom x2 = fromBool (toFloat x2 >= toFloat x1):s
+  | isAtom x2              = toListFunction (head . smGreaterEq) (x1:x2:s)
+  | isAtom x1              = toListFunction (head . smGreaterEq . (x1:)) (x2:s)
+  | otherwise              = toListFunction2 (head . smGreaterEq) (x1:x2:s)
+smGreaterEq s              = s
 
 -- SmOperator 'i'
 smI (q:s) = evalIfList q s
@@ -199,6 +253,22 @@ smJoin (x1:x2:s)                     = smJoin (x1:SmList [x2]:s)
 smJoin [SmList xs]                   = [SmList xs]
 smJoin s                             = [SmList s]
 
+-- SmOperator '<'
+smLess (x1:x2:s)
+  | isAtom x1 && isAtom x2 = fromBool (toFloat x2 < toFloat x1):s
+  | isAtom x2              = toListFunction (head . smLess) (x1:x2:s)
+  | isAtom x1              = toListFunction (head . smLess . (x1:)) (x2:s)
+  | otherwise              = toListFunction2 (head . smLess) (x1:x2:s)
+smLess s                   = s
+
+-- SmOperator '≤'
+smLessEq (x1:x2:s)
+  | isAtom x1 && isAtom x2 = fromBool (toFloat x2 <= toFloat x1):s
+  | isAtom x2              = toListFunction (head . smLessEq) (x1:x2:s)
+  | isAtom x1              = toListFunction (head . smLessEq . (x1:)) (x2:s)
+  | otherwise              = toListFunction2 (head . smLessEq) (x1:x2:s)
+smLessEq s                 = s
+
 -- SmOperator 'm'
 smMap (q:x:s)
   | isAtom x  = smMap (q:smRange0 (x:s))
@@ -207,6 +277,12 @@ smMap s       = s
 
 -- SmOperator '-'
 smMinus s = smAdd $ smNegative s
+
+-- SmOperator '%'
+smMod (x1:x2:s) = smMinus (y1:x2:s) where
+  y1:_ = smTimes $ y2:x1:s
+  y2:_ = smDiv $ x1:x2:s
+smMod s         = s
 
 -- SmOperator 'N'
 smNaturals s = SmList (map SmInt [0..]):s
@@ -224,9 +300,28 @@ smNegative s             = s
 smNot (x:s) = fromBool (isFalsy x):s
 smNot s       = [SmInt 0]
 
+-- SmOperator '|'
+smOr (x1:x2:s) = fromBool (isTruthy x1 || isTruthy x2):s
+smOr []        = [SmInt 0]
+smOr s         = s
+
 -- SmOperator '!'
 smPop (x:s) = s
 smPop s     = s
+
+-- SmOperator '^'
+smPower (SmInt x1:SmInt x2:s)     = SmInt (x2 ^ x1):s
+smPower (SmInt x1:SmFloat x2:s)   = SmFloat (x2 ^ x1):s
+smPower (SmFloat x1:SmInt x2:s)   = SmFloat (fromInteger x2 ** x1):s
+smPower (SmFloat x1:SmFloat x2:s) = SmFloat (x2 ** x1):s
+smPower (SmChar x1:x2:s)          = smPower $ smToInt (SmChar x1:x2:s)
+smPower (x1:SmChar x2:s)          = smPower $ x1:smToInt (SmChar x2:s)
+smPower (x1:x2:s)
+  | isAtom x1 && isAtom x2        = smPower $ smToInt $ x1:smToInt (x2:s)
+  | isAtom x2                     = toListFunction (head . smPower) (x1:x2:s)
+  | isAtom x1                     = toListFunction (head . smPower . (x1:)) (x2:s)
+  | otherwise                     = toListFunction2 (head . smPower) (x1:x2:s)
+smPower s                         = s
 
 -- SmOperator '('
 smPred s = smMinus (SmInt 1:s)
@@ -303,9 +398,26 @@ smToString s     = [SmString ""]
 smTwice (q:x1:x2:s) = evalIfList1 q (x1:s):evalIfList1 q (x2:s):s
 smTwice s           = smI s
 
+-- SmOperator '\\'
+smUncons (SmList (x:xs):s)   = SmList xs:x:s
+smUncons (SmString (x:xs):s) = SmString xs:SmChar x:s
+smUncons (x:s)
+  | isAtom x                 = SmList (map SmInt [1..toInt x]):s
+  | otherwise                = x:s
+smUncons s                   = s
+
 -- SmOperator '{'
 smUnstack (x:s) = toList x
 smUnstack s     = s
+
+-- SmOperator 'w'
+smWhile (q:t:s)
+  | isAtom t  = if toInt t <= 0 then s else smWhile $ q:smPred (t:evalIfList q s)
+  | otherwise = case evalIfList t s of
+    u:_ | isTruthy u -> smWhile (q:t:evalIfList q s)
+        | otherwise  -> s
+    _                -> []
+smWhile s     = s
 
 -- SmOperator 'x'
 smX (q:s) = evalIfList q (q:s)
