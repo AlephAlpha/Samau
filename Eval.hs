@@ -446,7 +446,7 @@ smSame s      = [SmInt 0]
 smSize (SmList xs:s)   = SmInt (genericLength xs):s
 smSize (SmString xs:s) = SmInt (genericLength xs):s
 smSize (x:s)           = SmInt 1:s
-smSame s               = SmInt 0:s
+smSize s               = SmInt 0:s
 
 -- SmOperator '╜'
 smSort (SmList xs:s)   = SmList (sort xs):s

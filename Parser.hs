@@ -26,12 +26,19 @@ parseNegative = do
     SmFloat y -> return $ SmFloat (-y)
 
 parseChar :: Parser SmExpression
-parseChar = char '\'' >> anyChar >>= return . SmChar
+parseChar = do
+  char '\''
+  x <- try (noneOf "\\") <|>
+       try (char '\\' >> oneOf "0abfntrv\"\'\\" >>= return . read . ("'\\" ++) . (: "'")) <|>
+       char '\\'
+  return $ SmChar x
 
 parseString :: Parser SmExpression
 parseString = do
   char '"'
-  x <- many (try (noneOf "\\\"") <|> (char '\\' >> anyChar >>= return . read . ("'\\" ++) . (: "'")))
+  x <- many (try (noneOf "\\\"")
+         <|> try (char '\\' >> oneOf "0abfntrv\"\'\\" >>= return . read . ("'\\" ++) . (: "'"))
+         <|> char '\\')
   char '"'
   return $ SmString x
 
