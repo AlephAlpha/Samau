@@ -3,10 +3,26 @@ module Types where
 data SmExpression = SmInt Integer
                   | SmFloat Double
                   | SmChar Char
+                  | SmOperator Char
                   | SmString String
                   | SmList [SmExpression]
-                  | SmOperator Char
-                    deriving (Show,Eq,Read,Ord)
+                    deriving (Show,Eq,Read)
+
+instance Ord SmExpression where
+  (SmInt x1) <= (SmInt x2)           = x1 <= x2
+  (SmFloat x1) <= (SmFloat x2)       = x1 <= x2
+  (SmChar x1) <= (SmChar x2)         = x1 <= x2
+  (SmOperator x1) <= (SmOperator x2) = x1 <= x2
+  (SmString x1) <= (SmString x2)     = x1 <= x2
+  (SmList x1) <= (SmList x2)         = x1 <= x2
+  (SmInt x1) <= (SmFloat x2)         = fromInteger x1 <= x2
+  (SmFloat x1) <= (SmInt x2)         = x1 < fromInteger x2
+  (SmInt _) <= _                     = True
+  (SmFloat _) <= _                   = True
+  (SmChar _) <= _                    = True
+  (SmOperator _) <= _                = True
+  (SmString _) <= _                  = True
+  _ <= _                             = False
 
 type SmProgram = [SmExpression]
 type SmStack = [SmExpression]

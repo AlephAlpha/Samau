@@ -53,11 +53,11 @@ evalIfList1 x s = case evalIfList x s of
 
 displayExpression :: SmExpression -> String
 displayExpression (SmInt x)
-  | x >= 0                       = show x ++ " "
-  | otherwise                    = "_" ++ show (-x) ++ " "
+  | x < 0                        = "_" ++ show (-x) ++ " "
+  | otherwise                    = show x ++ " "
 displayExpression (SmFloat x)
-  | x >= 0                       = show x ++ " "
-  | otherwise                    = "_" ++ show (-x) ++ " "
+  | x < 0                        = "_" ++ show (-x) ++ " "
+  | otherwise                    = show x ++ " "
 displayExpression (SmChar x)     = '\'':[x]
 displayExpression (SmString xs)  = show xs
 displayExpression (SmList xs)    = "[" ++ (xs >>= displayExpression) ++ "]"
@@ -98,6 +98,7 @@ builtins = M.fromList [('!', smPop),
                        ('@', smRoll),
                        ('A', smAnswer),
                        ('N', smNaturals),
+                       ('O', smPi),
                        ('\\', smUncons),
                        ('^', smPower),
                        ('_', smNegative),
@@ -106,6 +107,7 @@ builtins = M.fromList [('!', smPop),
                        ('g', smFold1),
                        ('i', smI),
                        ('m', smMap),
+                       ('o', smOuter),
                        ('t', smTwice),
                        ('x', smX),
                        ('w', smWhile),
@@ -114,16 +116,34 @@ builtins = M.fromList [('!', smPop),
                        ('|', smOr),
                        ('}', smStack),
                        ('~', smNot),
+                       ('Π', smProduct),
+                       ('Σ', smSum),
                        ('░', smToInt),
                        ('▒', smToFloat),
                        ('▓', smToChar),
                        ('█', smToString),
+                       ('╢', smIn),
+                       ('╖', smTail),
+                       ('╕', smHead),
+                       ('╣', smSubsets),
+                       ('║', smReverse),
+                       ('╗', smTails),
+                       ('╝', smIntersperse),
+                       ('╜', smSort),
+                       ('╛', smNub),
                        ('└', smFloor),
+                       ('╟', smPosition),
+                       ('╚', smConcat),
+                       ('╔', smInits),
+                       ('╠', smPermutations),
                        ('═', smEq),
+                       ('╒', smLast),
+                       ('╓', smInit),
                        ('┌', smCeiling),
                        ('≥', smGreaterEq),
                        ('≤', smLessEq),
-                       ('÷', smDiv)]
+                       ('÷', smDiv),
+                       ('√', smSqrt)]
 
 -- Built-in functions, sorted by names
 
@@ -161,6 +181,12 @@ smCeiling (SmChar x:s)   = SmChar (toLower x):s
 smCeiling (SmList x:s)   = toListFunction (head . smCeiling) (SmList x:s)
 smCeiling (SmString x:s) = smToString $ toListFunction (head . smCeiling) (SmString x:s)
 smCeiling s              = s
+
+-- SmOperator '╚'
+smConcat (x:s)
+  | isAtom x  = x:s
+  | otherwise = smFold (SmOperator '.':x:SmList []:s)
+smConcat s    = [SmList []]
 
 -- SmOperator ':'
 smCons (SmList xs:x:s)   = SmList (x:xs):s
@@ -233,6 +259,13 @@ smGreaterEq (x1:x2:s)
   | otherwise              = toListFunction2 (head . smGreaterEq) (x1:x2:s)
 smGreaterEq s              = s
 
+-- SmOperator '╕'
+smHead (SmList (x:xs):s)   = x:s
+smHead (SmList []:s)       = s
+smHead (SmString (x:xs):s) = SmChar x:s
+smHead (SmString []:s)     = s
+smHead s                   = s
+
 -- SmOperator 'i'
 smI (q:s) = evalIfList q s
 smI s     = s
@@ -242,16 +275,46 @@ smIf (q1:q2:t:s) = case evalIfList t s of
   u:_ | isTruthy u -> evalIfList q2 s
       | otherwise  -> evalIfList q1 s
   _                -> evalIfList q1 s
-smIf s         = s
+smIf s           = s
+
+-- SmOperator '╢'
+smIn (x:SmList xs:s)   = fromBool (elem x xs):s
+smIn (x:SmString xs:s) = fromBool (elem (toChar x) xs):s
+smIn s                 = s
+
+-- SmOperator '╓'
+smInit (SmList (x:xs):s)   = SmList (init $ x:xs):s
+smInit (SmList []:s)       = s
+smInit (SmString (x:xs):s) = SmString (init $ x:xs):s
+smInit (SmString []:s)     = s
+smInit s                   = s
+
+-- SmOperator '╔'
+smInits (SmList xs:s)   = SmList (map SmList $ inits xs):s
+smInits (SmString xs:s) = SmList (map SmString $ inits xs):s
+smInits s               = s
+
+-- SmOperator '╝'
+smIntersperse (x:SmList xs:s)   = SmList (intersperse x xs):s
+smIntersperse (x:SmString xs:s) = SmString (intersperse (toChar x) xs):s
+smIntersperse s                 = s
 
 -- SmOperator '.'
 smJoin (SmList xs1:SmList xs2:s)     = SmList (xs2 ++ xs1):s
 smJoin (SmString xs1:SmString xs2:s) = SmString (xs2 ++ xs1):s
-smJoin (x:SmList xs:s)               = SmList (xs ++ toList x):s
 smJoin (x:SmString xs:s)             = SmString (xs ++ toString x):s
+smJoin (SmString xs:x:s)             = SmString (toString x ++ xs):s
+smJoin (x:SmList xs:s)               = SmList (xs ++ toList x):s
 smJoin (x1:x2:s)                     = smJoin (x1:SmList [x2]:s)
 smJoin [SmList xs]                   = [SmList xs]
 smJoin s                             = [SmList s]
+
+-- SmOperator '╒'
+smLast (SmList (x:xs):s)   = (last $ x:xs):s
+smLast (SmList []:s)       = s
+smLast (SmString (x:xs):s) = SmChar (last $ x:xs):s
+smLast (SmString []:s)     = s
+smLast s                   = s
 
 -- SmOperator '<'
 smLess (x1:x2:s)
@@ -300,14 +363,40 @@ smNegative s             = s
 smNot (x:s) = fromBool (isFalsy x):s
 smNot s       = [SmInt 0]
 
+-- SmOperator '╛'
+smNub (SmList xs:s)   = SmList (nub xs):s
+smNub (SmString xs:s) = SmString (nub xs):s
+smNub s               = s
+
 -- SmOperator '|'
 smOr (x1:x2:s) = fromBool (isTruthy x1 || isTruthy x2):s
 smOr []        = [SmInt 0]
 smOr s         = s
 
+-- SmOperator 'o'
+smOuter (q:x1:x2:s)
+  | isAtom x1 = smOuter (q:smRange0 (x1:x2:s))
+  | isAtom x2 = smOuter (q:x1:smRange0 (x2:s))
+  | otherwise = toListFunction (head . toListFunction (evalIfList1 q) . (x1:)) (x2:s)
+smOuter s   = s 
+
+-- SmOperator '╠'
+smPermutations (SmList xs:s)   = SmList (map SmList $permutations xs):s
+smPermutations (SmString xs:s) = SmList (map SmString $ permutations xs):s
+smPermutations (x:s)           = smPermutations $ smRange0 (x:s)
+smPermutations s               = s
+
+-- SmOperator 'O'
+smPi s = SmFloat pi:s
+
 -- SmOperator '!'
 smPop (x:s) = s
 smPop s     = s
+
+-- SmOperator '╟'
+smPosition (x:SmList xs:s)   = SmList (map (SmInt . fromIntegral) $ elemIndices x xs):s
+smPosition (x:SmString xs:s) = SmList (map (SmInt . fromIntegral) $ elemIndices (toChar x) xs):s
+smPosition s                 = s
 
 -- SmOperator '^'
 smPower (SmInt x1:SmInt x2:s)     = SmInt (x2 ^ x1):s
@@ -326,11 +415,22 @@ smPower s                         = s
 -- SmOperator '('
 smPred s = smMinus (SmInt 1:s)
 
+-- SmOperator 'Π'
+smProduct (x:s)
+  | isAtom x  = smProduct $ smUncons $ x:s
+  | otherwise = smFold (SmOperator '*':x:SmInt 1:s)
+smProduct s   = [SmInt 1]
+
 -- SmOperator ','
 smRange0 (x:s)
   | isAtom x  = let y = toInt x in SmList (map SmInt $ if y>=0 then [0..y-1] else [-y-1,-y-2..0]):s
   | otherwise = smRange0 $ smSize (x:s)
 smRange0 s    = [SmList []]
+
+-- SmOperator '║'
+smReverse (SmList xs:s)   = SmList (reverse xs):s
+smReverse (SmString xs:s) = SmString (reverse xs):s
+smReverse s               = s
 
 -- SmOperator '@'
 smRoll (x1:x2:x3:s) = x3:x1:x2:s
@@ -345,7 +445,16 @@ smSame s      = [SmInt 0]
 -- SmOperator '#'
 smSize (SmList xs:s)   = SmInt (genericLength xs):s
 smSize (SmString xs:s) = SmInt (genericLength xs):s
-smSize s               = s
+smSize (x:s)           = SmInt 1:s
+smSame s               = SmInt 0:s
+
+-- SmOperator '╜'
+smSort (SmList xs:s)   = SmList (sort xs):s
+smSort (SmString xs:s) = SmString (sort xs):s
+smSort s               = s
+
+-- SmOperator '√'
+smSqrt s = smPower (SmFloat 0.5:s)
 
 -- SmOperator '}'
 smStack s = SmList s:s
@@ -353,9 +462,33 @@ smStack s = SmList s:s
 -- SmOperator ')'
 smSucc s = smAdd (SmInt 1:s)
 
+-- SmOperator '╣'
+smSubsets (SmList xs:s)   = SmList (map SmList $subsequences xs):s
+smSubsets (SmString xs:s) = SmList (map SmString $ subsequences xs):s
+smSubsets (x:s)           = smSubsets $ smRange0 (x:s)
+smSubsets s               = s
+
+-- SmOperator 'Σ'
+smSum (x:s)
+  | isAtom x  = smSum $ smUncons $ x:s
+  | otherwise = smFold (SmOperator '+':x:SmInt 0:s)
+smSum s       = [SmInt 0]
+
 -- SmOperator '$'
 smSwap (x1:x2:s) = x2:x1:s
 smSwap s         = s
+
+-- SmOperator '╖'
+smTail (SmList (x:xs):s)   = SmList xs:s
+smTail (SmList []:s)       = s
+smTail (SmString (x:xs):s) = SmString xs:s
+smTail (SmString []:s)     = s
+smTail s                   = s
+
+-- SmOperator '╗'
+smTails (SmList xs:s)   = SmList (map SmList $ tails xs):s
+smTails (SmString xs:s) = SmList (map SmString $ tails xs):s
+smTails s               = s
 
 -- SmOperator '*'
 smTimes (SmInt x1:SmInt x2:s)     = SmInt (x1 * x2):s

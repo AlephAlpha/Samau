@@ -1,6 +1,6 @@
 Samau
 =====
-Samau is a stack-based, concatenative, pure functional golfing language inspired by [Burlesque](http://mroman.ch/burlesque), [J](http://jsoftware.com/), [Joy](http://www.latrobe.edu.au/humanities/research/research-projects/past-projects/joy-programming-language), [Mathematica](http://wolfram.com/mathematica/), [Seriously](https://github.com/Mego/Seriously) and other languages. It is still under development, and only support a very limited amount of commands.
+Samau is a stack-based, concatenative, pure functional golfing language inspired by [Burlesque](http://mroman.ch/burlesque), [Joy](http://www.latrobe.edu.au/humanities/research/research-projects/past-projects/joy-programming-language), [Mathematica](http://wolfram.com/mathematica/), [Seriously](https://github.com/Mego/Seriously) and other languages. It is still under development, and only support a very limited amount of commands.
 
 Some of the code is based on Roman Müntener's [Burlesque](https://github.com/FMNSSun/Burlesque), which is under [BSD license](https://github.com/FMNSSun/Burlesque#license).
 
@@ -8,7 +8,7 @@ The default character encoding of Samau is [CP737](https://en.wikipedia.org/wiki
 
 ## Usage
 
-To compile the Samau interpreter, you need the [Haskell Platform](www.haskell.org/platform/).
+To compile the Samau interpreter, you need the [Haskell Platform](https://www.haskell.org/platform/).
 
 First, install the required packages:
 
@@ -34,7 +34,7 @@ Or you can run it without compiling:
 
     runghc Main.hs [args]
 
-## Document
+## Documents
 See the [wiki](https://github.com/AlephAlpha/Samau/wiki).
 
 ## Links
