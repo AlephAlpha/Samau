@@ -1,4 +1,4 @@
-module Parser (smParse) where
+module Parser (smParse, readOneNumber, readNumbers) where
 
 import Types
 
@@ -74,6 +74,22 @@ parseExpression = (parseString
 parseProgram :: Parser SmProgram
 parseProgram = optional spaces >> many parseExpression
 
-smParse x = case parse parseProgram "" x of
+runParse :: Parser a -> String -> a
+runParse p s = case parse p "" s of
   Left _  -> error "Parse error"
-  Right p -> p
+  Right x -> x
+
+smParse = runParse parseProgram
+
+parseNumber :: Parser SmExpression
+parseNumber = parseNegative <|> parseFloat' <|> try parseFloat <|> parseInt
+
+parseOneNumber :: Parser SmExpression
+parseOneNumber = many (noneOf "0123456789_.") >> (try parseNumber <|> (oneOf "_." >> parseOneNumber))
+
+readOneNumber = runParse parseOneNumber
+
+parseNumbers :: Parser SmExpression
+parseNumbers = many (try parseOneNumber) >>= return . SmList
+
+readNumbers = runParse parseNumbers

@@ -108,6 +108,7 @@ builtins = M.fromList [('!', smPop),
                        ('i', smI),
                        ('m', smMap),
                        ('o', smOuter),
+                       ('s', smFilter),
                        ('t', smTwice),
                        ('x', smX),
                        ('w', smWhile),
@@ -121,8 +122,9 @@ builtins = M.fromList [('!', smPop),
                        ('░', smToInt),
                        ('▒', smToFloat),
                        ('▓', smToChar),
-                       ('█', smToString),
-                       ('╢', smIn),
+                       ('│', smDivisible),
+                       ('╡', smIndex),
+                       ('╢', smElem),
                        ('╖', smTail),
                        ('╕', smHead),
                        ('╣', smSubsets),
@@ -132,14 +134,21 @@ builtins = M.fromList [('!', smPop),
                        ('╜', smSort),
                        ('╛', smNub),
                        ('└', smFloor),
+                       ('─', smRound),
                        ('╟', smPosition),
                        ('╚', smConcat),
                        ('╔', smInits),
                        ('╠', smPermutations),
                        ('═', smEq),
+                       ('╧', smCycle),
                        ('╒', smLast),
                        ('╓', smInit),
                        ('┌', smCeiling),
+                       ('█', smToString),
+                       ('▄', smToList),
+                       ('▌', smReadOneNumber),
+                       ('▐', smReadNumbers),
+                       ('±', smSign),
                        ('≥', smGreaterEq),
                        ('≤', smLessEq),
                        ('÷', smDiv),
@@ -195,12 +204,29 @@ smCons (SmChar x1:x2:s)  = SmString (toString x2 ++ [x1]):s
 smCons (x1:x2:s)         = SmList [x2,x1]:s
 smCons s                 = [SmList s]
 
+-- SmOperator '╧'
+smCycle (SmChar x:s)    = SmString (repeat x):s
+smCycle (SmString xs:s) = SmString (cycle xs):s
+smCycle (SmList xs:s)   = SmList (cycle xs):s
+smCycle (x:s)           = SmList (repeat x):s
+smCycle s               = s
+
 -- SmOperator 'd'
 smDip (q:x:s) = x:evalIfList q s
 smDip s       = s
 
 -- SmOperator '÷'
-smDiv s = smFloor $ smDivide s
+smDiv (SmInt x1:SmInt x2:s)     = SmInt (div x2 x1):s
+smDiv (SmInt x1:SmFloat x2:s)   = smFloor $ smDivide $SmInt x1:SmFloat x2:s
+smDiv (SmFloat x1:SmInt x2:s)   = smFloor $ smDivide $SmFloat x1:SmInt x2:s
+smDiv (SmFloat x1:SmFloat x2:s) = smFloor $ smDivide $SmFloat x1:SmFloat x2:s
+smDiv (SmChar x1:x2:s)          = smDiv $ smToInt (SmChar x1:x2:s)
+smDiv (x1:SmChar x2:s)          = smDiv $ x1:smToInt (SmChar x2:s)
+smDiv (x1:x2:s)
+  | isAtom x1 && isAtom x2        = smDiv $ smToInt $ x1:smToInt (x2:s)
+  | isAtom x2                     = toListFunction (head . smDiv) (x1:x2:s)
+  | isAtom x1                     = toListFunction (head . smDiv . (x1:)) (x2:s)
+  | otherwise                     = toListFunction2 (head . smDiv) (x1:x2:s)
 
 -- SmOperator '/'
 smDivide (x1:x2:s)
@@ -211,9 +237,22 @@ smDivide (x1:x2:s)
 smDivide []                = [SmFloat 1]
 smDivide s                 = smToFloat s
 
+-- SmOperator '│'
+smDivisible (x1:x2:s)
+  | isAtom x1 && isAtom x2 = smNot $ smMod (x1:x2:s)
+  | isAtom x2              = toListFunction (head . smDivisible) (x1:x2:s)
+  | isAtom x1              = toListFunction (head . smDivisible . (x1:)) (x2:s)
+  | otherwise              = toListFunction2 (head . smDivisible) (x1:x2:s)
+smDivisible s              = s
+
 -- SmOperator ';'
 smDup (x:s) = x:x:s
 smDup s     = s
+
+-- SmOperator '╢'
+smElem (x:SmList xs:s)   = fromBool (elem x xs):s
+smElem (x:SmString xs:s) = fromBool (elem (toChar x) xs):s
+smElem s                 = s
 
 -- SmOperator '═'
 smEq (x1:x2:s)
@@ -222,6 +261,11 @@ smEq (x1:x2:s)
   | isAtom x1              = smEq (x2:x1:s)
   | otherwise              = toListFunction2 (head . smEq) (x1:x2:s)
 smEq s                     = s
+
+-- SmOperator 's'
+smFilter (q:SmList xs:s)   = SmList (filter (isTruthy . evalIfList1 q . (:s)) xs):s
+smFilter (q:SmString xs:s) = SmString (filter (isTruthy . evalIfList1 q . (:s) . SmChar) xs):s
+smFilter s                 = s
 
 -- SmOperator '└'
 smFloor (SmInt x:s)    = SmInt x:s
@@ -277,10 +321,14 @@ smIf (q1:q2:t:s) = case evalIfList t s of
   _                -> evalIfList q1 s
 smIf s           = s
 
--- SmOperator '╢'
-smIn (x:SmList xs:s)   = fromBool (elem x xs):s
-smIn (x:SmString xs:s) = fromBool (elem (toChar x) xs):s
-smIn s                 = s
+-- SmOperator '╡'
+smIndex (x:SmList xs:s)
+  | isAtom x  = genericIndex (cycle xs) (toInt x):s
+  | otherwise = toListFunction (head . smIndex) (x:SmList xs:s)
+smIndex (x:SmString xs:s)
+  | isAtom x  = SmChar (genericIndex (cycle xs) (toInt x)):s
+  | otherwise = smToString $ toListFunction (head . smIndex) (x:SmString xs:s)
+smIndex s     = s
 
 -- SmOperator '╓'
 smInit (SmList (x:xs):s)   = SmList (init $ x:xs):s
@@ -427,6 +475,14 @@ smRange0 (x:s)
   | otherwise = smRange0 $ smSize (x:s)
 smRange0 s    = [SmList []]
 
+-- SmOperator '▐'
+smReadNumbers (SmString x:s) = readNumbers x:s
+smReadNumbers s              = s
+
+-- SmOperator '▌'
+smReadOneNumber (SmString x:s) = readOneNumber x:s
+smReadOneNumber s              = s
+
 -- SmOperator '║'
 smReverse (SmList xs:s)   = SmList (reverse xs):s
 smReverse (SmString xs:s) = SmString (reverse xs):s
@@ -436,11 +492,26 @@ smReverse s               = s
 smRoll (x1:x2:x3:s) = x3:x1:x2:s
 smRoll s            = s
 
+-- SmOperator '─'
+smRound (SmInt x:s)    = SmInt x:s
+smRound (SmFloat x:s)  = SmInt (round x):s
+smRound (SmList x:s)   = toListFunction (head . smRound) (SmList x:s)
+smRound s              = s
+
 -- SmOperator '='
 smSame (x1:x2:s)
   | x1 == x2  = SmInt 1:s
   | otherwise = SmInt 0:s
 smSame s      = [SmInt 0]
+
+-- SmOperator '±'
+smSign (x:s)
+  | isAtom x  = case compare (toFloat x) 0 of
+    GT -> SmInt 1:s
+    EQ -> SmInt 0:s
+    LT -> SmInt (-1):s
+  | otherwise = toListFunction (head . smSign) (x:s)
+smSign s      = s
 
 -- SmOperator '#'
 smSize (SmList xs:s)   = SmInt (genericLength xs):s
@@ -522,6 +593,10 @@ smToInt (x:s)
   | isAtom x  = SmInt (toInt x):s
   | otherwise = toListFunction (head . smToInt) (x:s)
 smToInt s     = s
+
+-- SmOperator '▄'
+smToList (x:s) = SmList (toList x):s
+smToList s     = [SmList []]
 
 -- SmOperator '█'
 smToString (x:s) = SmString (toString x):s
