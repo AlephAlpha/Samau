@@ -43,8 +43,9 @@ fromBool True  = SmInt 1
 fromBool False = SmInt 0
 
 evalIfList :: SmExpression -> SmFunction
-evalIfList (SmList q)     = evalProgram q
-evalIfList x              = evalExpression x
+evalIfList (SmList q)   = evalProgram q
+evalIfList (SmString q) = evalString q
+evalIfList x            = evalExpression x
 
 evalIfList1 :: SmExpression -> SmStack -> SmExpression
 evalIfList1 x s = case evalIfList x s of
@@ -97,12 +98,15 @@ builtins = M.fromList [('!', smPop),
                        ('?', smIf),
                        ('@', smRoll),
                        ('A', smAnswer),
+                       ('E', smE),
                        ('N', smNaturals),
                        ('O', smPi),
                        ('\\', smUncons),
                        ('^', smPower),
                        ('_', smNegative),
+                       ('c', smTake),
                        ('d', smDip),
+                       ('e', smDrop),
                        ('f', smFold),
                        ('g', smFold1),
                        ('i', smI),
@@ -111,12 +115,16 @@ builtins = M.fromList [('!', smPop),
                        ('s', smFilter),
                        ('t', smTwice),
                        ('x', smX),
-                       ('w', smWhile),
+                       ('w', smNest),
+                       ('y', smFixedPoint),
                        ('z', smZipWith),
                        ('{', smUnstack),
                        ('|', smOr),
                        ('}', smStack),
                        ('~', smNot),
+                       ('Α', smAbs),
+                       ('Δ', smDiff),
+                       ('Ε', smExp),
                        ('Π', smProduct),
                        ('Σ', smSum),
                        ('░', smToInt),
@@ -148,6 +156,7 @@ builtins = M.fromList [('!', smPop),
                        ('▄', smToList),
                        ('▌', smReadOneNumber),
                        ('▐', smReadNumbers),
+                       ('▀', smReadProgram),
                        ('±', smSign),
                        ('≥', smGreaterEq),
                        ('≤', smLessEq),
@@ -156,22 +165,26 @@ builtins = M.fromList [('!', smPop),
 
 -- Built-in functions, sorted by names
 
+-- SmOperator 'Α'
+smAbs (SmInt x:s)   = SmInt (abs x):s
+smAbs (SmFloat x:s) = SmFloat (abs x):s
+smAbs (x:s)
+  | isAtom x        = SmInt (abs $ toInt x):s
+  | otherwise       = toListFunction (head . smAbs) (x:s)
+smAbs s             = s
+
 -- SmOperator '+'
 smAdd (SmInt x1:SmInt x2:s)     = SmInt (x1 + x2):s
 smAdd (SmInt x1:SmFloat x2:s)   = SmFloat (fromInteger x1 + x2):s
 smAdd (SmFloat x1:SmInt x2:s)   = SmFloat (x1 + fromInteger x2):s
 smAdd (SmFloat x1:SmFloat x2:s) = SmFloat (x1 + x2):s
-smAdd (x1:SmChar x2:s)
-  | isAtom x1                   = smToChar $ SmInt (toInt x1 + toInt (SmChar x2)):s
-  | otherwise                   = smToString $ toListFunction (head . smAdd) (x1:SmChar x2:s)
-smAdd (SmChar x1:x2:s)          = smAdd (x2:SmChar x1:s)
-smAdd (SmString x1:x2:s)
-  | isAtom x2                   = smToString $ toListFunction (head . smAdd) (SmString x1:x2:s)
-  | otherwise                   = smToString $ toListFunction2 (head . smAdd) (SmString x1:x2:s)
-smAdd (x1:SmString x2:s)        = smAdd (SmString x2:x1:s)
-smAdd (SmList x1:SmList x2:s)   = toListFunction2 (head . smAdd) (SmList x1:SmList x2:s)
-smAdd (SmList x1:x2:s)          = toListFunction (head . smAdd) (SmList x1:x2:s)
-smAdd (x1:SmList x2:s)          = smAdd (SmList x2:x1:s)
+smAdd (SmChar x1:x2:s)          = smAdd $ smToInt (SmChar x1:x2:s)
+smAdd (x1:SmChar x2:s)          = smAdd (SmChar x2:x1:s)
+smAdd (x1:x2:s)
+  | isAtom x1 && isAtom x2      = smAdd $ smToInt $ x1:smToInt (x2:s)
+  | isAtom x2                   = toListFunction (head . smAdd) (x1:x2:s)
+  | isAtom x1                   = smAdd (x2:x1:s)
+  | otherwise                   = toListFunction2 (head . smAdd) (x1:x2:s)
 smAdd []                        = [SmInt 0]
 smAdd s                         = s
 
@@ -211,6 +224,11 @@ smCycle (SmList xs:s)   = SmList (cycle xs):s
 smCycle (x:s)           = SmList (repeat x):s
 smCycle s               = s
 
+-- SmOperator 'Δ'
+smDiff (SmList []:s) = SmList []:s
+smDiff (SmList xs:s) = smMinus (SmList xs:SmList (tail xs):s)
+smDiff s             = smDiff $ smToList s
+
 -- SmOperator 'd'
 smDip (q:x:s) = x:evalIfList q s
 smDip s       = s
@@ -245,9 +263,25 @@ smDivisible (x1:x2:s)
   | otherwise              = toListFunction2 (head . smDivisible) (x1:x2:s)
 smDivisible s              = s
 
+-- SmOperator 'e'
+smDrop (x:SmList xs:s)
+  | isAtom x             = SmList (drop (fromInteger $ toInt x) xs):s
+  | otherwise            = SmList (dropWhile (isTruthy . evalIfList1 x . (:s)) xs):s
+smDrop (x:SmString xs:s) = smDrop $ x:smToList (SmString xs:s)
+smDrop s                 = s
+
 -- SmOperator ';'
 smDup (x:s) = x:x:s
 smDup s     = s
+
+-- SmOperator 'E'
+smE s = SmFloat (exp 1):s
+
+-- SmOperator 'Ε'
+smExp (x:s)
+  | isAtom x  = SmFloat (exp $ toFloat x):s
+  | otherwise = toListFunction (head . smExp) (x:s)
+smExp s       = s
 
 -- SmOperator '╢'
 smElem (x:SmList xs:s)   = fromBool (elem x xs):s
@@ -266,6 +300,12 @@ smEq s                     = s
 smFilter (q:SmList xs:s)   = SmList (filter (isTruthy . evalIfList1 q . (:s)) xs):s
 smFilter (q:SmString xs:s) = SmString (filter (isTruthy . evalIfList1 q . (:s) . SmChar) xs):s
 smFilter s                 = s
+
+-- SmOperator 'y'
+smFixedPoint (q:s)
+  | evalIfList q s == s = s
+  | otherwise           = smFixedPoint (q:evalIfList q s)
+smNsmFixedPointest s    = s
 
 -- SmOperator '└'
 smFloor (SmInt x:s)    = SmInt x:s
@@ -407,6 +447,15 @@ smNegative (x:s)
   | otherwise            = toListFunction (head . smNegative) (x:s)
 smNegative s             = s
 
+-- SmOperator 'w'
+smNest (q:t:s)
+  | isAtom t  = if toInt t <= 0 then s else smNest $ q:smPred (t:evalIfList q s)
+  | otherwise = case evalIfList t s of
+    u:_ | isTruthy u -> smNest (q:t:evalIfList q s)
+        | otherwise  -> s
+    _                -> []
+smNest s      = s
+
 -- SmOperator '~'
 smNot (x:s) = fromBool (isFalsy x):s
 smNot s       = [SmInt 0]
@@ -482,6 +531,10 @@ smReadNumbers s              = s
 -- SmOperator '▌'
 smReadOneNumber (SmString x:s) = readOneNumber x:s
 smReadOneNumber s              = s
+
+-- SmOperator '▀'
+smReadProgram (SmString x:s) = evalString x s 
+smReadProgram s              = smI s
 
 -- SmOperator '║'
 smReverse (SmList xs:s)   = SmList (reverse xs):s
@@ -561,6 +614,13 @@ smTails (SmList xs:s)   = SmList (map SmList $ tails xs):s
 smTails (SmString xs:s) = SmList (map SmString $ tails xs):s
 smTails s               = s
 
+-- SmOperator 'c'
+smTake (x:SmList xs:s)
+  | isAtom x             = SmList (take (fromInteger $ toInt x) xs):s
+  | otherwise            = SmList (takeWhile (isTruthy . evalIfList1 x . (:s)) xs):s
+smTake (x:SmString xs:s) = smTake $ x:smToList (SmString xs:s)
+smTake s                 = s
+
 -- SmOperator '*'
 smTimes (SmInt x1:SmInt x2:s)     = SmInt (x1 * x2):s
 smTimes (SmInt x1:SmFloat x2:s)   = SmFloat (fromInteger x1 * x2):s
@@ -617,15 +677,6 @@ smUncons s                   = s
 -- SmOperator '{'
 smUnstack (x:s) = toList x
 smUnstack s     = s
-
--- SmOperator 'w'
-smWhile (q:t:s)
-  | isAtom t  = if toInt t <= 0 then s else smWhile $ q:smPred (t:evalIfList q s)
-  | otherwise = case evalIfList t s of
-    u:_ | isTruthy u -> smWhile (q:t:evalIfList q s)
-        | otherwise  -> s
-    _                -> []
-smWhile s     = s
 
 -- SmOperator 'x'
 smX (q:s) = evalIfList q (q:s)

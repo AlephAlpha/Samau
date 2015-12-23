@@ -12,13 +12,9 @@ To compile the Samau interpreter, you need the [Haskell Platform](https://www.ha
 
 First, install the required packages:
 
-    cabal install haskeline parsec
-
-<!--
     cabal install arithmoi haskeline parsec
 
 [See this if you have problem installing `arithmoi`.](https://github.com/cartazio/arithmoi/issues/13)
--->
 
 Then compile it:
 
@@ -34,8 +30,14 @@ Or you can run it without compiling:
 
     runghc Main.hs [args]
 
-## Documents
+## Documentation
 See the [wiki](https://github.com/AlephAlpha/Samau/wiki).
+
+## Licence
+
+Samau is licenced under [GNU GPL v3](https://github.com/AlephAlpha/Samau/blob/master/LICENSE).
+
+Some of the code is based on Roman Müntener's [Burlesque](https://github.com/FMNSSun/Burlesque), which is under [BSD license](https://github.com/FMNSSun/Burlesque#license).
 
 ## Links
 * [PPCG.se](http://codegolf.stackexchange.com/)
