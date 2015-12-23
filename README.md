@@ -2,9 +2,9 @@ Samau
 =====
 Samau is a stack-based, concatenative, pure functional golfing language inspired by [Burlesque](http://mroman.ch/burlesque), [Joy](http://www.latrobe.edu.au/humanities/research/research-projects/past-projects/joy-programming-language), [Mathematica](http://wolfram.com/mathematica/), [Seriously](https://github.com/Mego/Seriously) and other languages. It is still under development, and only support a very limited amount of commands.
 
-Some of the code is based on Roman Müntener's [Burlesque](https://github.com/FMNSSun/Burlesque), which is under [BSD license](https://github.com/FMNSSun/Burlesque#license).
-
 The default character encoding of Samau is [CP737](https://en.wikipedia.org/wiki/Code_page_737), the DOS code page for Greek language. But that's just for counting bytes. There is also a UTF-8 mode, and the REPL uses UTF-8. You _don't_ need to set your terminal text encoding to CP737.
+
+Samau is still under development and might be buggy.
 
 ## Usage
 
