@@ -5,6 +5,7 @@ import Parser
 
 import Data.Char
 import Data.List
+import Math.NumberTheory.Powers
 import Math.NumberTheory.Primes
 import qualified Data.Map as M
 
@@ -166,12 +167,12 @@ builtins = M.fromList [('!', smPop),
                        ('▄', smToList),
                        ('▌', smReadOneNumber),
                        ('▐', smReadNumbers),
-                       ('▀', smReadProgram),
                        ('±', smSign),
                        ('≥', smGreaterEq),
                        ('≤', smLessEq),
                        ('÷', smDiv),
-                       ('√', smSqrt)]
+                       ('√', smSqrt),
+                       ('²', smIsSquare)]
 
 -- Built-in functions, sorted by names
 
@@ -431,6 +432,16 @@ smIsPrime (x:s)
   | otherwise = toListFunction (head . smIsPrime) (x:s)
 smIsPrime s   = s
 
+-- SmOperator '²'
+smIsSquare (SmInt x:s)         = fromBool (isSquare x):s
+smIsSquare (SmFloat x:s)
+  | x == fromInteger (floor x) = fromBool (isSquare $ floor x):s
+  | otherwise                  = SmInt 0:s
+smIsSquare (x:s)
+  | isAtom x                   = smIsSquare $ smToInt $ (x:s)
+  | otherwise                  = toListFunction (head . smIsSquare) (x:s)
+smIsSquare s                   = s
+
 -- SmOperator '.'
 smJoin (SmList xs1:SmList xs2:s)     = SmList (xs2 ++ xs1):s
 smJoin (SmString xs1:SmString xs2:s) = SmString (xs2 ++ xs1):s
@@ -604,10 +615,6 @@ smReadNumbers s              = s
 -- SmOperator '▌'
 smReadOneNumber (SmString x:s) = readOneNumber x:s
 smReadOneNumber s              = s
-
--- SmOperator '▀'
-smReadProgram (SmString x:s) = evalString x s 
-smReadProgram s              = smI s
 
 -- SmOperator '║'
 smReverse (SmList xs:s)   = SmList (reverse xs):s
