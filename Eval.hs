@@ -5,6 +5,7 @@ import Parser
 
 import Data.Char
 import Data.List
+import Math.NumberTheory.Primes
 import qualified Data.Map as M
 
 evalProgram :: SmProgram -> SmFunction
@@ -101,6 +102,7 @@ builtins = M.fromList [('!', smPop),
                        ('E', smE),
                        ('N', smNaturals),
                        ('O', smPi),
+                       ('P', smPrimes),
                        ('\\', smUncons),
                        ('^', smPower),
                        ('_', smNegative),
@@ -125,8 +127,16 @@ builtins = M.fromList [('!', smPop),
                        ('Α', smAbs),
                        ('Δ', smDiff),
                        ('Ε', smExp),
+                       ('Λ', smLog),
                        ('Π', smProduct),
                        ('Σ', smSum),
+                       ('Φ', smFactor),
+                       ('γ', smGcd),
+                       ('λ', smLcm),
+                       ('ν', smNthPrime),
+                       ('π', smPrimePi),
+                       ('σ', smDivisorSigma),
+                       ('φ', smEulerPhi),
                        ('░', smToInt),
                        ('▒', smToFloat),
                        ('▓', smToChar),
@@ -198,7 +208,7 @@ smAnswer s = SmInt 42:s
 
 -- SmOperator '┌'
 smCeiling (SmInt x:s)    = SmInt x:s
-smCeiling (SmFloat x:s)  = SmInt (floor x):s
+smCeiling (SmFloat x:s)  = SmInt (ceiling x):s
 smCeiling (SmChar x:s)   = SmChar (toLower x):s
 smCeiling (SmList x:s)   = toListFunction (head . smCeiling) (SmList x:s)
 smCeiling (SmString x:s) = smToString $ toListFunction (head . smCeiling) (SmString x:s)
@@ -263,9 +273,17 @@ smDivisible (x1:x2:s)
   | otherwise              = toListFunction2 (head . smDivisible) (x1:x2:s)
 smDivisible s              = s
 
+-- SmOperator 'σ'
+smDivisorSigma (x1:x2:s)
+  | isAtom x1 && isAtom x2 = SmInt (sigma (fromInteger $ toInt x1) (toInt x2)):s
+  | isAtom x2              = toListFunction (head . smDivisorSigma) (x1:x2:s)
+  | isAtom x1              = toListFunction (head . smDivisorSigma . (x1:)) (x2:s)
+  | otherwise              = toListFunction2 (head . smDivisorSigma) (x1:x2:s)
+smDivisorSigma s           = s
+
 -- SmOperator 'e'
 smDrop (x:SmList xs:s)
-  | isAtom x             = SmList (drop (fromInteger $ toInt x) xs):s
+  | isAtom x             = SmList (genericDrop (toInt x) xs):s
   | otherwise            = SmList (dropWhile (isTruthy . evalIfList1 x . (:s)) xs):s
 smDrop (x:SmString xs:s) = smDrop $ x:smToList (SmString xs:s)
 smDrop s                 = s
@@ -296,6 +314,18 @@ smEq (x1:x2:s)
   | otherwise              = toListFunction2 (head . smEq) (x1:x2:s)
 smEq s                     = s
 
+-- SmOperator 'φ'
+smEulerPhi (x:s)
+  | isAtom x  = SmInt (totient $ toInt x):s
+  | otherwise = toListFunction (head . smEulerPhi) (x:s)
+smEulerPhi s  = s
+
+-- SmOperator 'Φ'
+smFactor (x:s)
+  | isAtom x  = SmList (map SmInt $ concatMap (uncurry $ flip replicate) $ factorise $ toInt x):s
+  | otherwise = toListFunction (head . smFactor) (x:s)
+smFactor s    = s
+  
 -- SmOperator 's'
 smFilter (q:SmList xs:s)   = SmList (filter (isTruthy . evalIfList1 q . (:s)) xs):s
 smFilter (q:SmString xs:s) = SmString (filter (isTruthy . evalIfList1 q . (:s) . SmChar) xs):s
@@ -305,7 +335,7 @@ smFilter s                 = s
 smFixedPoint (q:s)
   | evalIfList q s == s = s
   | otherwise           = smFixedPoint (q:evalIfList q s)
-smNsmFixedPointest s    = s
+smFixedPointest s       = s
 
 -- SmOperator '└'
 smFloor (SmInt x:s)    = SmInt x:s
@@ -326,6 +356,14 @@ smFold s                   = s
 smFold1 (q:x:s)
   | isAtom x  = smFold1 (q:smRange0 (x:s))
   | otherwise = smFold $ q:smUncons (x:s)
+
+-- SmOperator 'γ'
+smGcd (x1:x2:s)
+  | isAtom x1 && isAtom x2 = SmInt (gcd (toInt x1) (toInt x2)):s
+  | isAtom x2              = toListFunction (head . smGcd) (x1:x2:s)
+  | isAtom x1              = toListFunction (head . smGcd . (x1:)) (x2:s)
+  | otherwise              = toListFunction2 (head . smGcd) (x1:x2:s)
+smGcd s                    = s
 
 -- SmOperator '>'
 smGreater (x1:x2:s)
@@ -387,6 +425,12 @@ smIntersperse (x:SmList xs:s)   = SmList (intersperse x xs):s
 smIntersperse (x:SmString xs:s) = SmString (intersperse (toChar x) xs):s
 smIntersperse s                 = s
 
+-- SmOperator 'τ'
+smIsPrime (x:s)
+  | isAtom x  = fromBool (isCertifiedPrime $ toInt x):s
+  | otherwise = toListFunction (head . smIsPrime) (x:s)
+smIsPrime s   = s
+
 -- SmOperator '.'
 smJoin (SmList xs1:SmList xs2:s)     = SmList (xs2 ++ xs1):s
 smJoin (SmString xs1:SmString xs2:s) = SmString (xs2 ++ xs1):s
@@ -404,6 +448,14 @@ smLast (SmString (x:xs):s) = SmChar (last $ x:xs):s
 smLast (SmString []:s)     = s
 smLast s                   = s
 
+-- SmOperator 'λ'
+smLcm (x1:x2:s)
+  | isAtom x1 && isAtom x2 = SmInt (lcm (toInt x1) (toInt x2)):s
+  | isAtom x2              = toListFunction (head . smLcm) (x1:x2:s)
+  | isAtom x1              = toListFunction (head . smLcm . (x1:)) (x2:s)
+  | otherwise              = toListFunction2 (head . smLcm) (x1:x2:s)
+smLcm s                    = s
+
 -- SmOperator '<'
 smLess (x1:x2:s)
   | isAtom x1 && isAtom x2 = fromBool (toFloat x2 < toFloat x1):s
@@ -419,6 +471,12 @@ smLessEq (x1:x2:s)
   | isAtom x1              = toListFunction (head . smLessEq . (x1:)) (x2:s)
   | otherwise              = toListFunction2 (head . smLessEq) (x1:x2:s)
 smLessEq s                 = s
+
+-- SmOperator 'Λ'
+smLog (x:s)
+  | isAtom x  = SmFloat (log $ toFloat x):s
+  | otherwise = toListFunction (head . smLog) (x:s)
+smLog s       = s
 
 -- SmOperator 'm'
 smMap (q:x:s)
@@ -458,7 +516,13 @@ smNest s      = s
 
 -- SmOperator '~'
 smNot (x:s) = fromBool (isFalsy x):s
-smNot s       = [SmInt 0]
+smNot s     = [SmInt 0]
+
+-- SmOperator 'ν'
+smNthPrime (x:s)
+  | isAtom x  = SmInt (nthPrime $ toInt x):s
+  | otherwise = toListFunction (head . smNthPrime) (x:s)
+smNthPrime s  = s
 
 -- SmOperator '╛'
 smNub (SmList xs:s)   = SmList (nub xs):s
@@ -511,6 +575,15 @@ smPower s                         = s
 
 -- SmOperator '('
 smPred s = smMinus (SmInt 1:s)
+
+--SmOperator 'π'
+smPrimePi (x:s)
+  | isAtom x  = SmInt (primeCount $ toInt x):s
+  | otherwise = toListFunction (head . smPrimePi) (x:s)
+smPrimePi s   = s
+
+-- SmOperator 'P'
+smPrimes s = SmList (map SmInt primes):s
 
 -- SmOperator 'Π'
 smProduct (x:s)
@@ -616,7 +689,7 @@ smTails s               = s
 
 -- SmOperator 'c'
 smTake (x:SmList xs:s)
-  | isAtom x             = SmList (take (fromInteger $ toInt x) xs):s
+  | isAtom x             = SmList (genericTake (toInt x) xs):s
   | otherwise            = SmList (takeWhile (isTruthy . evalIfList1 x . (:s)) xs):s
 smTake (x:SmString xs:s) = smTake $ x:smToList (SmString xs:s)
 smTake s                 = s
