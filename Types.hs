@@ -19,9 +19,12 @@ instance Ord SmExpression where
   (SmFloat x1) <= (SmInt x2)         = x1 < fromInteger x2
   (SmInt _) <= _                     = True
   (SmFloat _) <= _                   = True
+  (SmChar _) <= (SmInt _)            = False
+  (SmChar _) <= (SmFloat _)          = False
   (SmChar _) <= _                    = True
-  (SmOperator _) <= _                = True
-  (SmString _) <= _                  = True
+  (SmOperator _) <= (SmString _)     = True
+  (SmOperator _) <= (SmList _)       = True
+  (SmString _) <= (SmList _)         = True
   _ <= _                             = False
 
 type SmProgram = [SmExpression]
