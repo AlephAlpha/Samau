@@ -708,7 +708,7 @@ smPrimes s = SmList (map SmInt primes):s
 -- SmOperator 'Π'
 smProduct (x:s)
   | isAtom x  = smProduct $ smUncons $ x:s
-  | otherwise = smFold (SmOperator '*':x:SmInt 1:s)
+  | otherwise = smDip $ SmOperator '!':smFold (SmOperator '*':x:SmInt 1:s)
 smProduct s   = [SmInt 1]
 
 -- SmOperator ','
@@ -800,7 +800,7 @@ smSubsets s               = s
 -- SmOperator 'Σ'
 smSum (x:s)
   | isAtom x  = smSum $ smUncons $ x:s
-  | otherwise = smFold (SmOperator '+':x:SmInt 0:s)
+  | otherwise = smDip $ SmOperator '!':smFold (SmOperator '+':x:SmInt 0:s)
 smSum s       = [SmInt 0]
 
 -- SmOperator '$'
