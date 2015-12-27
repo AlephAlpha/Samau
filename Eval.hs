@@ -156,6 +156,8 @@ builtins = M.fromList [('!', smPop),
                        ('γ', smGcd),
                        ('λ', smLcm),
                        ('ν', smNthPrime),
+                       ('ξ', smMin),
+                       ('ο', smMax),
                        ('π', smPrimePi),
                        ('σ', smDivisorSigma),
                        ('φ', smEulerPhi),
@@ -596,6 +598,22 @@ smMap (q:x:s)
   | otherwise = toListFunction (evalIfList1 q) (x:s)
 smMap s       = s
 
+-- SmOperator 'ο'
+smMax (x1:x2:s)
+  | isAtom x1 && isAtom x2 = max x1 x2:s
+  | isAtom x2              = toListFunction (head . smMax) (x1:x2:s)
+  | isAtom x1              = toListFunction (head . smMax . (x1:)) (x2:s)
+  | otherwise              = toListFunction2 (head . smMax) (x1:x2:s)
+smMax s                    = s
+
+-- SmOperator 'ξ'
+smMin (x1:x2:s)
+  | isAtom x1 && isAtom x2 = min x1 x2:s
+  | isAtom x2              = toListFunction (head . smMin) (x1:x2:s)
+  | isAtom x1              = toListFunction (head . smMin . (x1:)) (x2:s)
+  | otherwise              = toListFunction2 (head . smMin) (x1:x2:s)
+smMin s                    = s
+
 -- SmOperator '-'
 smMinus s = smAdd $ smNegative s
 
@@ -708,7 +726,7 @@ smPrimes s = SmList (map SmInt primes):s
 -- SmOperator 'Π'
 smProduct (x:s)
   | isAtom x  = smProduct $ smUncons $ x:s
-  | otherwise = smDip $ SmOperator '!':smFold (SmOperator '*':x:SmInt 1:s)
+  | otherwise = smFold (SmOperator '*':x:SmInt 1:s)
 smProduct s   = [SmInt 1]
 
 -- SmOperator ','
@@ -800,7 +818,7 @@ smSubsets s               = s
 -- SmOperator 'Σ'
 smSum (x:s)
   | isAtom x  = smSum $ smUncons $ x:s
-  | otherwise = smDip $ SmOperator '!':smFold (SmOperator '+':x:SmInt 0:s)
+  | otherwise = smFold (SmOperator '+':x:SmInt 0:s)
 smSum s       = [SmInt 0]
 
 -- SmOperator '$'
