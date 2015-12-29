@@ -45,15 +45,17 @@ fromBool :: Bool -> SmExpression
 fromBool True  = SmInt 1
 fromBool False = SmInt 0
 
+head' :: SmStack -> SmExpression
+head' (x:_) = x
+head' []    = SmInt 0
+
 evalIfList :: SmExpression -> SmFunction
 evalIfList (SmList q)   = evalProgram q
 evalIfList (SmString q) = evalString q
 evalIfList x            = evalExpression x
 
 evalIfList1 :: SmExpression -> SmStack -> SmExpression
-evalIfList1 x s = case evalIfList x s of
-  y:_ -> y
-  []  -> SmInt 0
+evalIfList1 x s = head' $ evalIfList x s
 
 displayExpression :: SmExpression -> String
 displayExpression (SmInt x)
@@ -74,11 +76,19 @@ displayStack (SmChar x:_)    = [x]
 displayStack (x:_)           = displayExpression x
 displayStack []              = ""
 
-toListFunction :: (SmStack -> SmExpression) -> SmFunction
-toListFunction f (xs:s)   = SmList (map (f . (:s)) $ toList xs):s
+smPopd :: SmFunction
+smPopd (x1:x2:s) = x1:s
+smPopd s         = s
 
-toListFunction2 :: (SmStack -> SmExpression) -> SmFunction
-toListFunction2 f (xs1:xs2:s) = SmList (zipWith (\x1 x2 -> f (x1:x2:s)) (toList xs1) (toList xs2)):s
+toListFunction :: SmFunction -> SmFunction
+toListFunction f (xs:s) = SmList (map (head' . f . (:s)) $ toList xs):s
+
+toListFunction2 :: SmFunction -> SmFunction
+toListFunction2 f (x1:x2:s)
+    | isAtom x1 && isAtom x2 = f (x1:x2:s)
+    | isAtom x2              = smPopd $ toListFunction f (x1:x2:s)
+    | isAtom x1              = smPopd $ toListFunction (f . (x1:)) (x2:s)
+    | otherwise              = SmList (zipWith (\y1 y2 -> head' $ f (y1:y2:s)) (toList x1) (toList x2)):s
 
 zipWith' :: a -> b -> (a -> b -> c) -> [a] -> [b] -> [c]
 zipWith' _  _  _ []     []     = []
@@ -86,8 +96,8 @@ zipWith' a0 b0 f (a:as) []     = f a  b0 : zipWith' a0 b0 f as []
 zipWith' a0 b0 f []     (b:bs) = f a0 b  : zipWith' a0 b0 f [] bs
 zipWith' a0 b0 f (a:as) (b:bs) = f a  b  : zipWith' a0 b0 f as bs
 
-toListFunction2' :: SmExpression -> (SmStack -> SmExpression) -> SmFunction
-toListFunction2' x f (xs1:xs2:s) = SmList (zipWith' x x (\x1 x2 -> f (x1:x2:s)) (toList xs1) (toList xs2)):s
+toListFunction2' :: SmExpression -> SmFunction -> SmFunction
+toListFunction2' x f (xs1:xs2:s) = SmList (zipWith' x x (\x1 x2 -> head' $ f (x1:x2:s)) (toList xs1) (toList xs2)):s
 
 toBase :: Integer -> Integer -> [Integer]
 toBase b 0 = []
@@ -212,7 +222,7 @@ smAbs (SmInt x:s)   = SmInt (abs x):s
 smAbs (SmFloat x:s) = SmFloat (abs x):s
 smAbs (x:s)
   | isAtom x        = SmInt (abs $ toInt x):s
-  | otherwise       = toListFunction (head . smAbs) (x:s)
+  | otherwise       = toListFunction smAbs (x:s)
 smAbs s             = s
 
 -- SmOperator '+'
@@ -224,9 +234,9 @@ smAdd (SmChar x1:x2:s)          = smAdd $ smToInt (SmChar x1:x2:s)
 smAdd (x1:SmChar x2:s)          = smAdd (SmChar x2:x1:s)
 smAdd (x1:x2:s)
   | isAtom x1 && isAtom x2      = smAdd $ smToInt $ x1:smToInt (x2:s)
-  | isAtom x2                   = toListFunction (head . smAdd) (x1:x2:s)
+  | isAtom x2                   = toListFunction2 smAdd (x1:x2:s)
   | isAtom x1                   = smAdd (x2:x1:s)
-  | otherwise                   = toListFunction2' (SmInt 0) (head . smAdd) (x1:x2:s)
+  | otherwise                   = toListFunction2' (SmInt 0) smAdd (x1:x2:s)
 smAdd []                        = [SmInt 0]
 smAdd s                         = s
 
@@ -266,8 +276,8 @@ smBitXor s                 = s
 smCeiling (SmInt x:s)    = SmInt x:s
 smCeiling (SmFloat x:s)  = SmInt (ceiling x):s
 smCeiling (SmChar x:s)   = SmChar (toLower x):s
-smCeiling (SmList x:s)   = toListFunction (head . smCeiling) (SmList x:s)
-smCeiling (SmString x:s) = smToString $ toListFunction (head . smCeiling) (SmString x:s)
+smCeiling (SmList x:s)   = toListFunction smCeiling (SmList x:s)
+smCeiling (SmString x:s) = smToString $ toListFunction smCeiling (SmString x:s)
 smCeiling s              = s
 
 -- SmOperator '╚'
@@ -296,7 +306,7 @@ smConvolve s                              = s
 smConvPower (x1:x2:s)
  | isAtom x1 && isAtom x2 = smNest $ (SmList [x2, SmOperator '∙']:x1:SmInt 1:s)
  | isAtom x1              = smNest $ (SmList [x2, SmOperator '∙']:x1:SmList [SmInt 1]:s)
- | otherwise              = toListFunction (head . smConvPower) (x1:x2:s)
+ | otherwise              = smPopd $ toListFunction smConvPower (x1:x2:s)
 smConvPower s             = s
 
 -- SmOperator '╧'
@@ -323,34 +333,26 @@ smDiv (SmFloat x1:SmFloat x2:s) = smFloor $ smDivide $SmFloat x1:SmFloat x2:s
 smDiv (SmChar x1:x2:s)          = smDiv $ smToInt (SmChar x1:x2:s)
 smDiv (x1:SmChar x2:s)          = smDiv $ x1:smToInt (SmChar x2:s)
 smDiv (x1:x2:s)
-  | isAtom x1 && isAtom x2        = smDiv $ smToInt $ x1:smToInt (x2:s)
-  | isAtom x2                     = toListFunction (head . smDiv) (x1:x2:s)
-  | isAtom x1                     = toListFunction (head . smDiv . (x1:)) (x2:s)
-  | otherwise                     = toListFunction2 (head . smDiv) (x1:x2:s)
+  | isAtom x1 && isAtom x2      = smDiv $ smToInt $ x1:smToInt (x2:s)
+  | otherwise                   = toListFunction2 smDiv (x1:x2:s)
 
 -- SmOperator '/'
 smDivide (x1:x2:s)
   | isAtom x1 && isAtom x2 = SmFloat (toFloat x2 / toFloat x1):s
-  | isAtom x2              = toListFunction (head . smDivide) (x1:x2:s)
-  | isAtom x1              = toListFunction (head . smDivide . (x1:)) (x2:s)
-  | otherwise              = toListFunction2 (head . smDivide) (x1:x2:s)
+  | otherwise              = toListFunction2 smDivide (x1:x2:s)
 smDivide []                = [SmFloat 1]
 smDivide s                 = smToFloat s
 
 -- SmOperator '│'
 smDivisible (x1:x2:s)
   | isAtom x1 && isAtom x2 = smNot $ smMod (x1:x2:s)
-  | isAtom x2              = toListFunction (head . smDivisible) (x1:x2:s)
-  | isAtom x1              = toListFunction (head . smDivisible . (x1:)) (x2:s)
-  | otherwise              = toListFunction2 (head . smDivisible) (x1:x2:s)
+  | otherwise              = toListFunction2 smDivisible (x1:x2:s)
 smDivisible s              = s
 
 -- SmOperator 'σ'
 smDivisorSigma (x1:x2:s)
   | isAtom x1 && isAtom x2 = SmInt (sigma (fromInteger $ toInt x1) (toInt x2)):s
-  | isAtom x2              = toListFunction (head . smDivisorSigma) (x1:x2:s)
-  | isAtom x1              = toListFunction (head . smDivisorSigma . (x1:)) (x2:s)
-  | otherwise              = toListFunction2 (head . smDivisorSigma) (x1:x2:s)
+  | otherwise              = toListFunction2 smDivisorSigma (x1:x2:s)
 smDivisorSigma s           = s
 
 -- SmOperator '·'
@@ -376,7 +378,7 @@ smE s = SmFloat (exp 1):s
 -- SmOperator 'Ε'
 smExp (x:s)
   | isAtom x  = SmFloat (exp $ toFloat x):s
-  | otherwise = toListFunction (head . smExp) (x:s)
+  | otherwise = toListFunction smExp (x:s)
 smExp s       = s
 
 -- SmOperator '╢'
@@ -387,21 +389,19 @@ smElem s                 = s
 -- SmOperator '═'
 smEq (x1:x2:s)
   | isAtom x1 && isAtom x2 = fromBool (toFloat x2 == toFloat x1):s
-  | isAtom x2              = toListFunction (head . smEq) (x1:x2:s)
-  | isAtom x1              = smEq (x2:x1:s)
-  | otherwise              = toListFunction2 (head . smEq) (x1:x2:s)
+  | otherwise              = toListFunction2 smEq (x1:x2:s)
 smEq s                     = s
 
 -- SmOperator 'φ'
 smEulerPhi (x:s)
   | isAtom x  = SmInt (totient $ toInt x):s
-  | otherwise = toListFunction (head . smEulerPhi) (x:s)
+  | otherwise = toListFunction smEulerPhi (x:s)
 smEulerPhi s  = s
 
 -- SmOperator 'Φ'
 smFactor (x:s)
-  | isAtom x  = SmList (map SmInt $ concatMap (uncurry $ flip replicate) $ factorise $ toInt x):s
-  | otherwise = toListFunction (head . smFactor) (x:s)
+  | isAtom x  = SmList (map (\(p, n) -> SmList [SmInt p, SmInt $ fromIntegral n]) $ factorise $ toInt x):s
+  | otherwise = toListFunction smFactor (x:s)
 smFactor s    = s
   
 -- SmOperator 's'
@@ -425,8 +425,8 @@ smFixedPointList s           = s
 smFloor (SmInt x:s)    = SmInt x:s
 smFloor (SmFloat x:s)  = SmInt (floor x):s
 smFloor (SmChar x:s)   = SmChar (toLower x):s
-smFloor (SmList x:s)   = toListFunction (head . smFloor) (SmList x:s)
-smFloor (SmString x:s) = smToString $ toListFunction (head . smFloor) (SmString x:s)
+smFloor (SmList x:s)   = toListFunction smFloor (SmList x:s)
+smFloor (SmString x:s) = smToString $ toListFunction smFloor (SmString x:s)
 smFloor s              = s
 
 -- SmOperator 'f'
@@ -458,31 +458,25 @@ smFoldList s                     = s
 -- SmOperator 'B'
 smFromBase (x1:x2:s)
   | isAtom x1 = smFold $ SmList [SmOperator '$', x1, SmOperator '*', SmOperator '+']:smReverse (x2:SmInt 0:s)
-  | otherwise = toListFunction (head . smFromBase) (x1:x2:s)
+  | otherwise = smPopd $ toListFunction smFromBase (x1:x2:s)
 smFromBase s  = s
 
 -- SmOperator 'γ'
 smGcd (x1:x2:s)
   | isAtom x1 && isAtom x2 = SmInt (gcd (toInt x1) (toInt x2)):s
-  | isAtom x2              = toListFunction (head . smGcd) (x1:x2:s)
-  | isAtom x1              = toListFunction (head . smGcd . (x1:)) (x2:s)
-  | otherwise              = toListFunction2 (head . smGcd) (x1:x2:s)
+  | otherwise              = toListFunction2 smGcd (x1:x2:s)
 smGcd s                    = s
 
 -- SmOperator '>'
 smGreater (x1:x2:s)
   | isAtom x1 && isAtom x2 = fromBool (toFloat x2 > toFloat x1):s
-  | isAtom x2              = toListFunction (head . smGreater) (x1:x2:s)
-  | isAtom x1              = toListFunction (head . smGreater . (x1:)) (x2:s)
-  | otherwise              = toListFunction2 (head . smGreater) (x1:x2:s)
+  | otherwise              = toListFunction2 smGreater (x1:x2:s)
 smGreater s                = s
 
 -- SmOperator '≥'
 smGreaterEq (x1:x2:s)
   | isAtom x1 && isAtom x2 = fromBool (toFloat x2 >= toFloat x1):s
-  | isAtom x2              = toListFunction (head . smGreaterEq) (x1:x2:s)
-  | isAtom x1              = toListFunction (head . smGreaterEq . (x1:)) (x2:s)
-  | otherwise              = toListFunction2 (head . smGreaterEq) (x1:x2:s)
+  | otherwise              = toListFunction2 smGreaterEq (x1:x2:s)
 smGreaterEq s              = s
 
 -- SmOperator '╕'
@@ -506,10 +500,10 @@ smIf s           = s
 -- SmOperator '╡'
 smIndex (x:SmList xs:s)
   | isAtom x  = genericIndex (cycle xs) (toInt x):s
-  | otherwise = toListFunction (head . smIndex) (x:SmList xs:s)
+  | otherwise = toListFunction smIndex (x:SmList xs:s)
 smIndex (x:SmString xs:s)
   | isAtom x  = SmChar (genericIndex (cycle xs) (toInt x)):s
-  | otherwise = smToString $ toListFunction (head . smIndex) (x:SmString xs:s)
+  | otherwise = smToString $ toListFunction smIndex (x:SmString xs:s)
 smIndex s     = s
 
 -- SmOperator '╓'
@@ -532,7 +526,7 @@ smIntersperse s                 = s
 -- SmOperator 'τ'
 smIsPrime (x:s)
   | isAtom x  = fromBool (isCertifiedPrime $ toInt x):s
-  | otherwise = toListFunction (head . smIsPrime) (x:s)
+  | otherwise = toListFunction smIsPrime (x:s)
 smIsPrime s   = s
 
 -- SmOperator '²'
@@ -542,7 +536,7 @@ smIsSquare (SmFloat x:s)
   | otherwise                  = SmInt 0:s
 smIsSquare (x:s)
   | isAtom x                   = smIsSquare $ smToInt $ (x:s)
-  | otherwise                  = toListFunction (head . smIsSquare) (x:s)
+  | otherwise                  = toListFunction smIsSquare (x:s)
 smIsSquare s                   = s
 
 -- SmOperator '.'
@@ -565,53 +559,43 @@ smLast s                   = s
 -- SmOperator 'λ'
 smLcm (x1:x2:s)
   | isAtom x1 && isAtom x2 = SmInt (lcm (toInt x1) (toInt x2)):s
-  | isAtom x2              = toListFunction (head . smLcm) (x1:x2:s)
-  | isAtom x1              = toListFunction (head . smLcm . (x1:)) (x2:s)
-  | otherwise              = toListFunction2 (head . smLcm) (x1:x2:s)
+  | otherwise              = toListFunction2 smLcm (x1:x2:s)
 smLcm s                    = s
 
 -- SmOperator '<'
 smLess (x1:x2:s)
   | isAtom x1 && isAtom x2 = fromBool (toFloat x2 < toFloat x1):s
-  | isAtom x2              = toListFunction (head . smLess) (x1:x2:s)
-  | isAtom x1              = toListFunction (head . smLess . (x1:)) (x2:s)
-  | otherwise              = toListFunction2 (head . smLess) (x1:x2:s)
+  | otherwise              = toListFunction2 smLess (x1:x2:s)
 smLess s                   = s
 
 -- SmOperator '≤'
 smLessEq (x1:x2:s)
   | isAtom x1 && isAtom x2 = fromBool (toFloat x2 <= toFloat x1):s
-  | isAtom x2              = toListFunction (head . smLessEq) (x1:x2:s)
-  | isAtom x1              = toListFunction (head . smLessEq . (x1:)) (x2:s)
-  | otherwise              = toListFunction2 (head . smLessEq) (x1:x2:s)
+  | otherwise              = toListFunction2 smLessEq (x1:x2:s)
 smLessEq s                 = s
 
 -- SmOperator 'Λ'
 smLog (x:s)
   | isAtom x  = SmFloat (log $ toFloat x):s
-  | otherwise = toListFunction (head . smLog) (x:s)
+  | otherwise = toListFunction smLog (x:s)
 smLog s       = s
 
 -- SmOperator 'm'
 smMap (q:x:s)
   | isAtom x  = smMap (q:smRange0 (x:s))
-  | otherwise = toListFunction (evalIfList1 q) (x:s)
+  | otherwise = toListFunction (evalIfList q) (x:s)
 smMap s       = s
 
 -- SmOperator 'ο'
 smMax (x1:x2:s)
   | isAtom x1 && isAtom x2 = max x1 x2:s
-  | isAtom x2              = toListFunction (head . smMax) (x1:x2:s)
-  | isAtom x1              = toListFunction (head . smMax . (x1:)) (x2:s)
-  | otherwise              = toListFunction2 (head . smMax) (x1:x2:s)
+  | otherwise              = toListFunction2 smMax (x1:x2:s)
 smMax s                    = s
 
 -- SmOperator 'ξ'
 smMin (x1:x2:s)
   | isAtom x1 && isAtom x2 = min x1 x2:s
-  | isAtom x2              = toListFunction (head . smMin) (x1:x2:s)
-  | isAtom x1              = toListFunction (head . smMin . (x1:)) (x2:s)
-  | otherwise              = toListFunction2 (head . smMin) (x1:x2:s)
+  | otherwise              = toListFunction2 smMin (x1:x2:s)
 smMin s                    = s
 
 -- SmOperator '-'
@@ -632,7 +616,7 @@ smNegative (SmFloat x:s) = SmFloat (-x):s
 smNegative (SmChar x:s)  = SmInt (- (toInt $ SmChar x)):s
 smNegative (x:s)
   | isAtom x             = x:s
-  | otherwise            = toListFunction (head . smNegative) (x:s)
+  | otherwise            = toListFunction smNegative (x:s)
 smNegative s             = s
 
 -- SmOperator 'w'
@@ -659,7 +643,7 @@ smNot s     = [SmInt 0]
 -- SmOperator 'ν'
 smNthPrime (x:s)
   | isAtom x  = SmInt (nthPrime $ toInt x):s
-  | otherwise = toListFunction (head . smNthPrime) (x:s)
+  | otherwise = toListFunction smNthPrime (x:s)
 smNthPrime s  = s
 
 -- SmOperator '╛'
@@ -676,7 +660,7 @@ smOr s         = s
 smOuter (q:x1:x2:s)
   | isAtom x1 = smOuter (q:smRange0 (x1:x2:s))
   | isAtom x2 = smOuter (q:x1:smRange0 (x2:s))
-  | otherwise = toListFunction (head . toListFunction (evalIfList1 q) . (x1:)) (x2:s)
+  | otherwise = toListFunction (toListFunction (evalIfList q) . (x1:)) (x2:s)
 smOuter s   = s 
 
 -- SmOperator '╠'
@@ -706,9 +690,7 @@ smPower (SmChar x1:x2:s)          = smPower $ smToInt (SmChar x1:x2:s)
 smPower (x1:SmChar x2:s)          = smPower $ x1:smToInt (SmChar x2:s)
 smPower (x1:x2:s)
   | isAtom x1 && isAtom x2        = smPower $ smToInt $ x1:smToInt (x2:s)
-  | isAtom x2                     = toListFunction (head . smPower) (x1:x2:s)
-  | isAtom x1                     = toListFunction (head . smPower . (x1:)) (x2:s)
-  | otherwise                     = toListFunction2 (head . smPower) (x1:x2:s)
+  | otherwise                     = toListFunction2 smPower (x1:x2:s)
 smPower s                         = s
 
 -- SmOperator '('
@@ -717,7 +699,7 @@ smPred s = smMinus (SmInt 1:s)
 --SmOperator 'π'
 smPrimePi (x:s)
   | isAtom x  = SmInt (primeCount $ toInt x):s
-  | otherwise = toListFunction (head . smPrimePi) (x:s)
+  | otherwise = toListFunction smPrimePi (x:s)
 smPrimePi s   = s
 
 -- SmOperator 'P'
@@ -755,7 +737,7 @@ smRoll s            = s
 -- SmOperator '─'
 smRound (SmInt x:s)    = SmInt x:s
 smRound (SmFloat x:s)  = SmInt (round x):s
-smRound (SmList x:s)   = toListFunction (head . smRound) (SmList x:s)
+smRound (SmList x:s)   = toListFunction smRound (SmList x:s)
 smRound s              = s
 
 -- SmOperator '╦'
@@ -765,13 +747,13 @@ smRotate (x:SmList y:s)
                else if toInt x > 0
                     then smRotate (SmInt (toInt x - 1):SmList (tail y ++ [head y]):s)
                     else smRotate (SmInt (toInt x + 1):SmList ([last y] ++ init y):s)
-  | otherwise = toListFunction (head . smRotate) (x:SmList y:s)
+  | otherwise = toListFunction smRotate (x:SmList y:s)
 smRotate (x:SmString y:s)
   | isAtom x  = smToString $ smRotate (x:smToList (SmString y:s))
-  | otherwise = toListFunction (head . smRotate) (x:SmString y:s)
+  | otherwise = toListFunction smRotate (x:SmString y:s)
 smRotate (x:y:s)
   | isAtom x  = SmInt (rotate (toInt y) (fromInteger $ toInt x)):s
-  | otherwise = toListFunction (head . smRotate) (x:y:s)
+  | otherwise = toListFunction smRotate (x:y:s)
 smRotate s    = s
 
 -- SmOperator '='
@@ -786,7 +768,7 @@ smSign (x:s)
     GT -> SmInt 1:s
     EQ -> SmInt 0:s
     LT -> SmInt (-1):s
-  | otherwise = toListFunction (head . smSign) (x:s)
+  | otherwise = toListFunction smSign (x:s)
 smSign s      = s
 
 -- SmOperator '#'
@@ -853,36 +835,32 @@ smTimes (SmChar x1:x2:s)          = smTimes $ smToInt (SmChar x1:x2:s)
 smTimes (x1:SmChar x2:s)          = smTimes (SmChar x2:x1:s)
 smTimes (x1:x2:s)
   | isAtom x1 && isAtom x2        = smTimes $ smToInt $ x1:smToInt (x2:s)
-  | isAtom x2                     = toListFunction (head . smTimes) (x1:x2:s)
-  | isAtom x1                     = smTimes (x2:x1:s)
-  | otherwise                     = toListFunction2 (head . smTimes) (x1:x2:s)
+  | otherwise                     = toListFunction2 smTimes (x1:x2:s)
 smTimes []                        = [SmInt 1]
 smTimes s                         = s
 
 -- SmOperator 'D'
 smToBase (x1:x2:s)
   | isAtom x1 && isAtom x2 = SmList (map SmInt $ toBase (abs $ toInt x1) (abs $ toInt x2)):s
-  | isAtom x2              = toListFunction (head . smToBase) (x1:x2:s)
-  | isAtom x1              = toListFunction (head . smToBase . (x1:)) (x2:s)
-  | otherwise              = toListFunction2 (head . smToBase) (x1:x2:s)
+  | otherwise              = toListFunction2 smToBase (x1:x2:s)
 smToBase s                 = s
 
 -- SmOperator '▓'
 smToChar (x:s)
   | isAtom x  = SmChar (toChar x):s
-  | otherwise = smToString $ toListFunction (head . smToChar) (x:s)
+  | otherwise = smToString $ toListFunction smToChar (x:s)
 smToChar s               = s
 
 -- SmOperator '▒'
 smToFloat (x:s)
   | isAtom x  = SmFloat (toFloat x):s
-  | otherwise = toListFunction (head . smToFloat) (x:s)
+  | otherwise = toListFunction smToFloat (x:s)
 smToFloat s   = s
 
 -- SmOperator '░'
 smToInt (x:s)
   | isAtom x  = SmInt (toInt x):s
-  | otherwise = toListFunction (head . smToInt) (x:s)
+  | otherwise = toListFunction smToInt (x:s)
 smToInt s     = s
 
 -- SmOperator '▄'
@@ -917,5 +895,5 @@ smX s     = s
 smZipWith (q:x1:x2:s)
   | isAtom x1 = smZipWith (q:smRange0 (x1:x2:s))
   | isAtom x2 = smZipWith (q:x1:smRange0 (x2:s))
-  | otherwise = toListFunction2 (evalIfList1 q) (x1:x2:s)
+  | otherwise = toListFunction2 (evalIfList q) (x1:x2:s)
 smZipWith s   = s
