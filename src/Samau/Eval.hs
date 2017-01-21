@@ -20,6 +20,14 @@ builtins :: M.Map Char SmFunc
 builtins = M.fromList [
   -- 0x21, '!', pop
   ('!', void pop),
+  -- 0x2a, '*'
+  ('*', toSmFuncNum2 (*)),
+  -- 0x2b, '+'
+  ('+', toSmFuncNum2 (+)),
+  -- 0x2d, '-'
+  ('-', toSmFuncNum2 (-)),
+  -- 0x2f, '/'
+  ('/', toSmFuncList2 ((/) :: Double -> Double -> Double)),
   -- 0x3a, ':', cons
   (':', toSmFunc2 ((:) :: SmTerm -> SmExpr -> SmExpr)),
   -- 0x3b, ';', dup

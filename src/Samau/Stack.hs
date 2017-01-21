@@ -1,3 +1,5 @@
+{-# LANGUAGE RankNTypes #-}
+
 module Samau.Stack where
 
 import           Control.Monad.State.Lazy
@@ -70,19 +72,39 @@ toSmFunc2 f = do
   y <- pop
   push . toSm $ f (fromSm y) (fromSm x)
 
-toSmFunc' :: (SmType a, SmType b) => (a -> b) -> SmFunc
-toSmFunc' f = do
+toSmFuncList :: (SmType a, SmType b) => (a -> b) -> SmFunc
+toSmFuncList f = do
   x <- peek
   case x of
-    SmList _ -> mapSm $ toSmFunc' f
+    SmList _ -> mapSm $ toSmFuncList f
     _        -> toSmFunc f
 
-toSmFunc2' :: (SmType a, SmType b, SmType c) => (a -> b -> c) -> SmFunc
-toSmFunc2' f = do
+toSmFuncList2 :: (SmType a, SmType b, SmType c) => (a -> b -> c) -> SmFunc
+toSmFuncList2 f = do
   x <- peek
   y <- dip peek
   case (x, y) of
-    (SmList _, SmList _) -> zipWithSm $ toSmFunc2' f
-    (SmList _, _)        -> mapSm $ toSmFunc2 f <* dip pop
-    (_, SmList _)        -> pop *> mapSm (push x *> toSmFunc2 f)
+    (SmList _, SmList _) -> zipWithSm $ toSmFuncList2 f
+    (SmList _, _)        -> mapSm $ toSmFuncList2 f <* dip pop
+    (_, SmList _)        -> pop *> mapSm (push x *> toSmFuncList2 f)
     (_, _)               -> toSmFunc2 f
+
+toSmFunNum :: (forall a . Num a => a -> a) -> SmFunc
+toSmFunNum f = do
+  x <- pop
+  case x of
+    SmList _  -> push x *> mapSm (toSmFunNum f)
+    SmFloat _ -> push (toSm . f $ (fromSm x :: Double))
+    _         -> push (toSm . f $ (fromSm x :: Integer))
+
+toSmFuncNum2 :: (forall a . Num a => a -> a -> a) -> SmFunc
+toSmFuncNum2 f = do
+  x <- pop
+  y <- pop
+  case (x, y) of
+    (SmList _, SmList _) -> push y *> push x *> zipWithSm (toSmFuncNum2 f)
+    (SmList _, _)        -> push y *> push x *> mapSm (toSmFuncNum2 f) <* dip pop
+    (_, SmList _)        -> push y *> mapSm (push x *> toSmFuncNum2 f)
+    (SmFloat _, _)       -> push . toSm $ f (fromSm y :: Double) (fromSm x :: Double)
+    (_, SmFloat _)       -> push . toSm $ f (fromSm y :: Double) (fromSm x :: Double)
+    (_, _)               -> push . toSm $ f (fromSm y :: Integer) (fromSm x :: Integer)

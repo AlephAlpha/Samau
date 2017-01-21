@@ -8,7 +8,11 @@ Note that Samau uses [CP737](https://en.wikipedia.org/wiki/Code_page_737) encodi
 
 | Function | CP737 | Description |
 |:--------:|:-----:|:----------- |
-| `!` | `0x21` | Disgard the top of the stack |
-| `:` | `0x3a` | [cons](https://en.wikipedia.org/wiki/Cons) |
+| `!` | `0x21` | Discard the top of the stack |
+| `*` | `0x2a` | Times |
+| `+` | `0x2b` | Plus |
+| `-` | `0x2d` | Minus |
+| `/` | `0x2f` | Divide, always return a float |
+| `:` | `0x3a` | [Cons](https://en.wikipedia.org/wiki/Cons) |
 | `;` | `0x3b` | Duplicate the top of the stack |
 | `d` | `0x64` | Pop a list `a` and an item `b`, execute `a` as a function, push `b` back. |
