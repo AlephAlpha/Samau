@@ -31,7 +31,9 @@ Or you can run it without compiling:
     runghc Main.hs [args]
 
 ## Documentation
-See the [wiki](https://github.com/AlephAlpha/Samau/wiki).
+~~See the [wiki](https://github.com/AlephAlpha/Samau/wiki).~~
+
+Sorry, the wiki is accidentally deleted.
 
 ## Licence
 
