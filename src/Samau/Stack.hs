@@ -37,23 +37,15 @@ dip f = do
   push x
   return y
 
-mapSm :: SmFunc -> SmFunc
-mapSm f = do
-  xs <- pop
+mapSm :: SmFunc -> [SmTerm] -> SmFunc
+mapSm f xs = do
   s <- get
-  push . SmList . map (execSm f . (:-: s)) $ fromSm' xs
+  push . SmList $ map (execSm f . (:-: s)) xs
 
-zipWithSm :: SmFunc -> SmFunc
-zipWithSm f = do
-  xs <- pop
-  ys <- pop
+zipWithSm :: SmFunc -> [SmTerm] -> [SmTerm] -> SmFunc
+zipWithSm f xs ys = do
   s <- get
-  push . SmList $ zipWith' (\x y -> execSm f (y :-: x :-: s)) (fromSm' xs) (fromSm' ys)
-
-fromSm' :: SmTerm -> SmExpr
-fromSm' (SmInt x)   = map SmInt [0..x-1]
-fromSm' (SmFloat x) = map SmFloat [0..x-1]
-fromSm' x           = fromSm x
+  push . SmList $ zipWith' (\x y -> execSm f (y :-: x :-: s)) xs ys
 
 zipWith' :: (SmTerm -> SmTerm -> SmTerm) -> [SmTerm] -> [SmTerm] -> [SmTerm]
 zipWith' _ [] []             = []
@@ -62,9 +54,7 @@ zipWith' f [] (y : ys)       = f SmNil y : zipWith' f [] ys
 zipWith' f (x : xs) (y : ys) = f x y : zipWith' f xs ys
 
 toSmFunc :: (SmType a, SmType b) => (a -> b) -> SmFunc
-toSmFunc f = do
-  x <- pop
-  push . toSm . f $ fromSm x
+toSmFunc f = pop >>= push . toSm . f . fromSm
 
 toSmFunc2 :: (SmType a, SmType b, SmType c) => (a -> b -> c) -> SmFunc
 toSmFunc2 f = do
@@ -74,26 +64,26 @@ toSmFunc2 f = do
 
 toSmFuncList :: (SmType a, SmType b) => (a -> b) -> SmFunc
 toSmFuncList f = do
-  x <- peek
+  x <- pop
   case x of
-    SmList _ -> mapSm $ toSmFuncList f
-    _        -> toSmFunc f
+    SmList xs -> mapSm (toSmFuncList f) xs
+    _         -> push . toSm . f $ fromSm x
 
 toSmFuncList2 :: (SmType a, SmType b, SmType c) => (a -> b -> c) -> SmFunc
 toSmFuncList2 f = do
-  x <- peek
-  y <- dip peek
+  x <- pop
+  y <- pop
   case (x, y) of
-    (SmList _, SmList _) -> zipWithSm $ toSmFuncList2 f
-    (SmList _, _)        -> mapSm $ toSmFuncList2 f <* dip pop
-    (_, SmList _)        -> pop *> mapSm (push x *> toSmFuncList2 f)
-    (_, _)               -> toSmFunc2 f
+    (SmList xs, SmList ys) -> zipWithSm (toSmFuncList2 f) xs ys
+    (SmList xs, _)         -> push y *> mapSm (toSmFuncList2 f) xs <* dip pop
+    (_, SmList ys)         -> mapSm (push x *> toSmFuncList2 f) ys
+    (_, _)                 -> push . toSm $ f (fromSm y) (fromSm x)
 
 toSmFunNum :: (forall a . Num a => a -> a) -> SmFunc
 toSmFunNum f = do
   x <- pop
   case x of
-    SmList _  -> push x *> mapSm (toSmFunNum f)
+    SmList xs -> mapSm (toSmFunNum f) xs
     SmFloat _ -> push (toSm . f $ (fromSm x :: Double))
     _         -> push (toSm . f $ (fromSm x :: Integer))
 
@@ -102,9 +92,9 @@ toSmFuncNum2 f = do
   x <- pop
   y <- pop
   case (x, y) of
-    (SmList _, SmList _) -> push y *> push x *> zipWithSm (toSmFuncNum2 f)
-    (SmList _, _)        -> push y *> push x *> mapSm (toSmFuncNum2 f) <* dip pop
-    (_, SmList _)        -> push y *> mapSm (push x *> toSmFuncNum2 f)
-    (SmFloat _, _)       -> push . toSm $ f (fromSm y :: Double) (fromSm x :: Double)
-    (_, SmFloat _)       -> push . toSm $ f (fromSm y :: Double) (fromSm x :: Double)
-    (_, _)               -> push . toSm $ f (fromSm y :: Integer) (fromSm x :: Integer)
+    (SmList xs, SmList ys) -> zipWithSm (toSmFuncNum2 f) xs ys
+    (SmList xs, _)         -> push y *> mapSm (toSmFuncNum2 f) xs <* dip pop
+    (_, SmList ys)         -> mapSm (push x *> toSmFuncNum2 f) ys
+    (SmFloat _, _)         -> push (toSm $ f (fromSm y :: Double) (fromSm x :: Double))
+    (_, SmFloat _)         -> push (toSm $ f (fromSm y :: Double) (fromSm x :: Double))
+    (_, _)                 -> push (toSm $ f (fromSm y :: Integer) (fromSm x :: Integer))

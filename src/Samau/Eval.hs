@@ -20,6 +20,8 @@ builtins :: M.Map Char SmFunc
 builtins = M.fromList [
   -- 0x21, '!', pop
   ('!', void pop),
+  -- 0x24, '$', swap
+  ('$', dip pop >>= push),
   -- 0x2a, '*'
   ('*', toSmFuncNum2 (*)),
   -- 0x2b, '+'
@@ -32,6 +34,27 @@ builtins = M.fromList [
   (':', toSmFunc2 ((:) :: SmTerm -> SmExpr -> SmExpr)),
   -- 0x3b, ';', dup
   (';', peek >>= push),
+  -- 0x5e, '^'
+  ('^', smPower),
   -- 0x64, 'd', dip
-  ('d', pop >>= dip . evalExpr . fromSm)
+  ('d', pop >>= dip . evalExpr . fromSm),
+  -- 0x69, 'i'
+  ('i', pop >>= evalExpr . fromSm)
   ]
+
+fromSm' :: SmTerm -> SmExpr
+fromSm' (SmInt x)   = map SmInt [1..x]
+fromSm' (SmFloat x) = map SmFloat [1..x]
+fromSm' x           = fromSm x
+
+smPower :: SmFunc
+smPower = do
+  x <- pop
+  y <- pop
+  case (x, y) of
+    (SmList xs, SmList ys) -> zipWithSm smPower xs ys
+    (SmList xs, _)         -> push y *> mapSm smPower xs <* dip pop
+    (_, SmList ys)         -> mapSm (push x *> smPower) ys
+    (SmFloat _, _)         -> push (toSm $ (fromSm y :: Double) ** (fromSm x :: Double))
+    (_, SmFloat _)         -> push (toSm $ (fromSm y :: Double) ^ (fromSm x :: Integer))
+    (_, _)                 -> push (toSm $ (fromSm y :: Integer) ^ (fromSm x :: Integer))

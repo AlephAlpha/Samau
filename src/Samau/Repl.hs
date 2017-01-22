@@ -21,5 +21,8 @@ repl = do
       catch (outputStrLn $ rep s) $ \e -> outputStrLn $ show (e :: SomeException)
       repl
 
+settings :: Settings IO
+settings = Settings noCompletion Nothing True
+
 runRepl :: IO ()
-runRepl = runInputT defaultSettings repl
+runRepl = runInputT settings repl
