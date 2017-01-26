@@ -22,20 +22,36 @@ builtins = M.fromList [
   ('!', void pop),
   -- 0x24, '$', swap
   ('$', dip pop >>= push),
+  -- 0x28, '(', pred
+  ('(', toSmFuncEnum pred),
+  -- 0x29, ')', succ
+  (')', toSmFuncEnum succ),
   -- 0x2a, '*'
   ('*', toSmFuncNum2 (*)),
   -- 0x2b, '+'
   ('+', toSmFuncNum2 (+)),
   -- 0x2d, '-'
   ('-', toSmFuncNum2 (-)),
+  -- 0x2e, '.', concat
+  ('.', toSmFunc2 ((++) :: SmExpr -> SmExpr -> SmExpr)),
   -- 0x2f, '/'
   ('/', toSmFuncList2 ((/) :: Double -> Double -> Double)),
   -- 0x3a, ':', cons
   (':', toSmFunc2 ((:) :: SmTerm -> SmExpr -> SmExpr)),
   -- 0x3b, ';', dup
   (';', peek >>= push),
+  -- 0x3c, '<'
+  ('<', toSmFuncList2 ((<) :: Double -> Double -> Bool)),
+  -- 0x3d, '=', same
+  ('=', toSmFunc2 ((==) :: SmTerm -> SmTerm -> Bool)),
+  -- 0x3e, '>'
+  ('>', toSmFuncList2 ((>) :: Double -> Double -> Bool)),
+  -- 0x40, '@', roll
+  ('@', dip (dip pop) >>= push),
   -- 0x5e, '^'
   ('^', smPower),
+  -- 0x5f, '_'
+  ('_', toSmFunNum negate),
   -- 0x64, 'd', dip
   ('d', pop >>= dip . evalExpr . fromSm),
   -- 0x69, 'i'
@@ -43,8 +59,9 @@ builtins = M.fromList [
   ]
 
 fromSm' :: SmTerm -> SmExpr
-fromSm' (SmInt x)   = map SmInt [1..x]
-fromSm' (SmFloat x) = map SmFloat [1..x]
+fromSm' (SmInt x)   = map SmInt [0 .. x-1]
+fromSm' (SmFloat x) = map SmFloat [0 .. x-1]
+fromSm' (SmChar x)  = map SmChar [minBound .. pred x]
 fromSm' x           = fromSm x
 
 smPower :: SmFunc

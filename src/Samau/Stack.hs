@@ -98,3 +98,13 @@ toSmFuncNum2 f = do
     (SmFloat _, _)         -> push (toSm $ f (fromSm y :: Double) (fromSm x :: Double))
     (_, SmFloat _)         -> push (toSm $ f (fromSm y :: Double) (fromSm x :: Double))
     (_, _)                 -> push (toSm $ f (fromSm y :: Integer) (fromSm x :: Integer))
+
+toSmFuncEnum :: (forall a . Enum a => a -> a) -> SmFunc
+toSmFuncEnum f = do
+  x <- pop
+  case x of
+    SmList xs -> mapSm (toSmFuncEnum f) xs
+    SmInt _   -> push (toSm . f $ (fromSm x :: Integer))
+    SmFloat _ -> push (toSm . f $ (fromSm x :: Double))
+    SmChar _  -> push (toSm . f $ (fromSm x :: Char))
+    SmOp _    -> push (toSm . f $ (fromSm x :: Char))
