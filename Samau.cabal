@@ -21,6 +21,7 @@ library
                      , Samau.Stack
                      , Samau.Types
   build-depends:       base >= 4.7 && < 5
+                     , arithmoi
                      , containers
                      , haskeline
                      , megaparsec
