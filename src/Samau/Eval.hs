@@ -1,4 +1,4 @@
-module Samau.Eval where
+module Samau.Eval (evalTerm, evalExpr, execExpr) where
 
 import           Control.Monad
 import qualified Data.Map.Strict as M
@@ -14,7 +14,7 @@ evalExpr :: SmExpr -> SmFunc
 evalExpr = mapM_ evalTerm
 
 execExpr :: SmExpr -> SmTerm
-execExpr = flip execSm initStack. evalExpr
+execExpr = flip execSm initStack . evalExpr
 
 builtins :: M.Map Char SmFunc
 builtins = M.fromList [
@@ -22,6 +22,8 @@ builtins = M.fromList [
   ('!', void pop),
   -- 0x24, '$', swap
   ('$', dip pop >>= push),
+  -- 0x26, '&', and
+  ('&', toSmFuncList2 (&&)),
   -- 0x28, '(', pred
   ('(', toSmFuncEnum pred),
   -- 0x29, ')', succ
@@ -55,15 +57,31 @@ builtins = M.fromList [
   -- 0x64, 'd', dip
   ('d', pop >>= dip . evalExpr . fromSm),
   -- 0x69, 'i'
-  ('i', pop >>= evalExpr . fromSm)
+  ('i', pop >>= evalExpr . fromSm),
+  -- 0x6d, 'm', map
+  ('m', do
+    f <- pop
+    xs <- pop
+    mapSm (evalExpr $ fromSm f) (toList xs)),
+  -- 0x74, 't', twice
+  ('t', peek >>= dip . dip . evalExpr . fromSm >> pop >>= evalExpr . fromSm),
+  -- 0x7a, 'z', zipWith
+  ('z', do
+    f <- pop
+    xs <- pop
+    ys <- pop
+    zipWithSm (evalExpr $ fromSm f) (toList xs) (toList ys)),
+  -- 0x7c, '|', or
+  ('|', toSmFuncList2 (||))
   ]
 
-fromSm' :: SmTerm -> SmExpr
-fromSm' (SmInt x)   = map SmInt [0 .. x-1]
-fromSm' (SmFloat x) = map SmFloat [0 .. x-1]
-fromSm' (SmChar x)  = map SmChar [minBound .. pred x]
-fromSm' x           = fromSm x
+toList :: SmTerm -> SmExpr
+toList (SmInt x)   = map SmInt [0 .. x-1]
+toList (SmFloat x) = map SmFloat [0 .. x-1]
+toList (SmChar x)  = map SmChar [minBound .. pred x]
+toList x           = fromSm x
 
+-- 0x5e, '^'
 smPower :: SmFunc
 smPower = do
   x <- pop

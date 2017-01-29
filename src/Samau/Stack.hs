@@ -54,13 +54,10 @@ zipWith' f [] (y : ys)       = f SmNil y : zipWith' f [] ys
 zipWith' f (x : xs) (y : ys) = f x y : zipWith' f xs ys
 
 toSmFunc :: (SmType a, SmType b) => (a -> b) -> SmFunc
-toSmFunc f = pop >>= push . toSm . f . fromSm
+toSmFunc f = f . fromSm <$> pop >>= push . toSm
 
 toSmFunc2 :: (SmType a, SmType b, SmType c) => (a -> b -> c) -> SmFunc
-toSmFunc2 f = do
-  x <- pop
-  y <- pop
-  push . toSm $ f (fromSm y) (fromSm x)
+toSmFunc2 f = f . fromSm <$> pop <*> (fromSm <$> pop) >>= push . toSm
 
 toSmFuncList :: (SmType a, SmType b) => (a -> b) -> SmFunc
 toSmFuncList f = do
