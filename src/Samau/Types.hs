@@ -43,11 +43,11 @@ instance SmType Integer where
   toSm = SmInt
 
 instance SmType Int where
-  fromSm SmNil       = 0
-  fromSm (SmInt x)   = fromInteger x
-  fromSm (SmFloat x) = floor x
-  fromSm (SmChar x)  = fromEnum x
-  fromSm (SmOp x)    = fromEnum x
+  fromSm = fromInteger . fromSm
+  toSm = SmInt . toInteger
+
+instance SmType Word where
+  fromSm = fromInteger . fromSm
   toSm = SmInt . toInteger
 
 instance SmType Double where

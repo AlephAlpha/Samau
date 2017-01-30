@@ -3,9 +3,12 @@
 module Samau.Eval (evalTerm, evalExpr, execExpr) where
 
 import           Control.Monad
-import qualified Data.Map.Strict          as M
+import           Data.List
+import qualified Data.Map.Strict                       as M
 import           Data.Maybe
-import           Math.NumberTheory.Primes
+import           Math.NumberTheory.ArithmeticFunctions
+import           Math.NumberTheory.Primes.Counting
+import           Math.NumberTheory.Primes.Sieve
 import           Samau.Stack
 import           Samau.Types
 
@@ -24,7 +27,7 @@ builtins = M.fromList [
   -- 0x21, '!', pop
   ('!', void pop),
   -- 0x23, '#', length
-  ('$', toSmFunc (length :: SmExpr -> Int)),
+  ('#', toSmFunc (length :: SmExpr -> Int)),
   -- 0x24, '$', swap
   ('$', dip pop >>= push),
   -- 0x26, '&', and
@@ -53,6 +56,10 @@ builtins = M.fromList [
   ('=', toSmFunc2 ((==) :: SmTerm -> SmTerm -> Bool)),
   -- 0x3e, '>'
   ('>', toSmFuncList2 ((>) :: Double -> Double -> Bool)),
+  -- 0x3f, '?', if
+  ('?', do
+    x <- dip $ dip pop
+    if fromSm x then void pop else void $ dip pop),
   -- 0x40, '@', roll
   ('@', dip (dip pop) >>= push),
   -- 0x4e, 'N', natural numbers
@@ -62,7 +69,7 @@ builtins = M.fromList [
   -- 0x5e, '^'
   ('^', smPower),
   -- 0x5f, '_'
-  ('_', toSmFunNum negate),
+  ('_', toSmFuncNum negate),
   -- 0x64, 'd', dip
   ('d', pop >>= dip . evalExpr . fromSm),
   -- 0x69, 'i'
@@ -79,8 +86,23 @@ builtins = M.fromList [
     ys <- pop
     zipWithSm (evalExpr $ fromSm f) (toList xs) (toList ys)),
   -- 0x7c, '|', or
-  ('|', toSmFuncList2 (||))
+  ('|', toSmFuncList2 (||)),
+  -- 0x7e, '~', not
+  ('~', toSmFuncList not),
+  -- 0x80, 'Α', abs
+  ('Α', toSmFuncNum abs),
+  -- 0xa7, 'π', prime counting
+  ('π', toSmFuncList primeCount),
+  -- 0xa9, 'σ', sigma
+  ('σ', toSmFuncList2 (sigma :: Word -> Integer -> Integer)),
+  -- 0xac, 'υ', n-th prime
+  ('υ', toSmFuncList nthPrime),
+  -- 0xad, 'φ', phi
+  ('φ', toSmFuncList (totient :: Integer -> Integer))
   ]
+
+applySm :: SmState a -> SmState SmTerm
+applySm f = execSm f <$> stack
 
 mapSm :: SmFunc -> [SmTerm] -> SmFunc
 mapSm f xs = do
@@ -121,11 +143,11 @@ toSmFuncList2 f = do
     (_, SmList ys)         -> mapSm (push x *> toSmFuncList2 f) ys
     (_, _)                 -> push . toSm $ f (fromSm y) (fromSm x)
 
-toSmFunNum :: (forall a . Num a => a -> a) -> SmFunc
-toSmFunNum f = do
+toSmFuncNum :: (forall a . Num a => a -> a) -> SmFunc
+toSmFuncNum f = do
   x <- pop
   case x of
-    SmList xs -> mapSm (toSmFunNum f) xs
+    SmList xs -> mapSm (toSmFuncNum f) xs
     SmFloat _ -> push (toSm . f $ (fromSm x :: Double))
     _         -> push (toSm . f $ (fromSm x :: Integer))
 
