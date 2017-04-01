@@ -24,6 +24,7 @@ Samau uses [CP737](https://en.wikipedia.org/wiki/Code_page_737) encoding for cou
 | `#` | `0x24` | Length |
 | `$` | `0x24` | Swap the top two items of the stack |
 | `&` | `0x24` | And |
+| `%` | `0x25` | Mod |
 | `(` | `0x28` | -1 |
 | `)` | `0x29` | +1 |
 | `*` | `0x2a` | Times |
@@ -53,6 +54,7 @@ Samau uses [CP737](https://en.wikipedia.org/wiki/Code_page_737) encoding for cou
 | `σ` | `0xa9` | [Divisor function](https://en.wikipedia.org/wiki/Divisor_function) |
 | `ν` | `0xac` | N-th prime |
 | `φ` | `0xad` | [Totient function](https://en.wikipedia.org/wiki/Euler%27s_totient_function) |
+| `÷` | `0xf6` | Divide, always returns an integer |
 
 ## Usage
 

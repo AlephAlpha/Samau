@@ -30,6 +30,8 @@ builtins = M.fromList [
   ('#', toSmFunc (length :: SmExpr -> Int)),
   -- 0x24, '$', swap
   ('$', dip pop >>= push),
+  -- 0x25, '%', mod
+  ('%', toSmFuncNum2' (\x y -> x - fromInteger (floor (x / y)) * y) (\x y -> x - fromInteger (div (floor x) y * y)) mod),
   -- 0x26, '&', and
   ('&', toSmFuncList2 (&&)),
   -- 0x28, '(', pred
@@ -67,7 +69,7 @@ builtins = M.fromList [
   -- 0x50, 'P', primes
   ('P', push . SmList $ map SmInt primes),
   -- 0x5e, '^'
-  ('^', smPower),
+  ('^', toSmFuncNum2' (**) (^) (^)),
   -- 0x5f, '_'
   ('_', toSmFuncNum negate),
   -- 0x64, 'd', dip
@@ -98,7 +100,9 @@ builtins = M.fromList [
   -- 0xac, 'υ', n-th prime
   ('υ', toSmFuncList nthPrime),
   -- 0xad, 'φ', phi
-  ('φ', toSmFuncList (totient :: Integer -> Integer))
+  ('φ', toSmFuncList (totient :: Integer -> Integer)),
+  -- 0xf6, '÷', div
+  ('÷', toSmFuncList2 ((floor .) . (/) :: Double -> Double -> Integer))
   ]
 
 applySm :: SmState a -> SmState SmTerm
@@ -148,8 +152,8 @@ toSmFuncNum f = do
   x <- pop
   case x of
     SmList xs -> mapSm (toSmFuncNum f) xs
-    SmFloat _ -> push (toSm . f $ (fromSm x :: Double))
-    _         -> push (toSm . f $ (fromSm x :: Integer))
+    SmFloat _ -> push . toSm . f $ (fromSm x :: Double)
+    _         -> push . toSm . f $ (fromSm x :: Integer)
 
 toSmFuncNum2 :: (forall a . Num a => a -> a -> a) -> SmFunc
 toSmFuncNum2 f = do
@@ -159,35 +163,34 @@ toSmFuncNum2 f = do
     (SmList xs, SmList ys) -> zipWithSm (toSmFuncNum2 f) ys xs
     (SmList xs, _)         -> push y *> mapSm (toSmFuncNum2 f) xs <* dip pop
     (_, SmList ys)         -> mapSm (push x *> toSmFuncNum2 f) ys
-    (SmFloat _, _)         -> push (toSm $ f (fromSm y :: Double) (fromSm x :: Double))
-    (_, SmFloat _)         -> push (toSm $ f (fromSm y :: Double) (fromSm x :: Double))
-    (_, _)                 -> push (toSm $ f (fromSm y :: Integer) (fromSm x :: Integer))
+    (SmFloat _, _)         -> push . toSm $ f (fromSm y :: Double) (fromSm x :: Double)
+    (_, SmFloat _)         -> push . toSm $ f (fromSm y :: Double) (fromSm x :: Double)
+    (_, _)                 -> push . toSm $ f (fromSm y :: Integer) (fromSm x :: Integer)
+
+toSmFuncNum2' :: (Double -> Double -> Double) -> (Double -> Integer -> Double) -> (Integer -> Integer -> Integer) -> SmFunc
+toSmFuncNum2' f g h = do
+  x <- pop
+  y <- pop
+  case (x, y) of
+    (SmList xs, SmList ys) -> zipWithSm (toSmFuncNum2' f g h) ys xs
+    (SmList xs, _)         -> push y *> mapSm (toSmFuncNum2' f g h) xs <* dip pop
+    (_, SmList ys)         -> mapSm (push x *> toSmFuncNum2' f g h) ys
+    (SmFloat _, _)         -> push . toSm $ f (fromSm y) (fromSm x)
+    (_, SmFloat _)         -> push . toSm $ g (fromSm y) (fromSm x)
+    (_, _)                 -> push . toSm $ h (fromSm y) (fromSm x)
 
 toSmFuncEnum :: (forall a . Enum a => a -> a) -> SmFunc
 toSmFuncEnum f = do
   x <- pop
   case x of
     SmList xs -> mapSm (toSmFuncEnum f) xs
-    SmInt _   -> push (toSm . f $ (fromSm x :: Integer))
-    SmFloat _ -> push (toSm . f $ (fromSm x :: Double))
-    SmChar _  -> push (toSm . f $ (fromSm x :: Char))
-    SmOp _    -> push (toSm . f $ (fromSm x :: Char))
+    SmInt _   -> push . toSm . f $ (fromSm x :: Integer)
+    SmFloat _ -> push . toSm . f $ (fromSm x :: Double)
+    SmChar _  -> push . toSm . f $ (fromSm x :: Char)
+    SmOp _    -> push . toSm . f $ (fromSm x :: Char)
 
 toList :: SmTerm -> SmExpr
 toList (SmInt x)   = map SmInt [0 .. x-1]
 toList (SmFloat x) = map SmFloat [0 .. x-1]
 toList (SmChar x)  = map SmChar [minBound .. pred x]
 toList x           = fromSm x
-
--- 0x5e, '^'
-smPower :: SmFunc
-smPower = do
-  x <- pop
-  y <- pop
-  case (x, y) of
-    (SmList xs, SmList ys) -> zipWithSm smPower xs ys
-    (SmList xs, _)         -> push y *> mapSm smPower xs <* dip pop
-    (_, SmList ys)         -> mapSm (push x *> smPower) ys
-    (SmFloat _, _)         -> push (toSm $ (fromSm y :: Double) ** (fromSm x :: Double))
-    (_, SmFloat _)         -> push (toSm $ (fromSm y :: Double) ^ (fromSm x :: Integer))
-    (_, _)                 -> push (toSm $ (fromSm y :: Integer) ^ (fromSm x :: Integer))
