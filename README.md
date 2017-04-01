@@ -37,7 +37,7 @@ Samau uses [CP737](https://en.wikipedia.org/wiki/Code_page_737) encoding for cou
 | `=` | `0x3d` | Test if two items are the same |
 | `>` | `0x3e` | Greater than |
 | `?` | `0x3f` | Pop `a`, pop `b`, pop `c`, if `c` is truthy, then push `b`, else push `a` |
-| `@` | `0x40` | Pop `a`, pop `b`, pop `c`, push `b`, push `a`, push `a` |
+| `@` | `0x40` | Pop `a`, pop `b`, pop `c`, push `b`, push `a`, push `c` |
 | `N` | `0x4e` | Push the list of all natural numbers |
 | `P` | `0x50` | Push the list of all primes |
 | `^` | `0x5e` | Power |
